@@ -11,40 +11,69 @@ const PORT = +process.env.PORT || 8080;
 const ROOT = __dirname;
 const DATA = path.join(ROOT, 'data');
 const PUB = path.join(ROOT, 'public');
+const BIBLES = path.join(DATA, 'bibles');
+const PLANS_FILE = path.join(DATA, 'plans.json');
+let VERSION = '0.0.0';
+try { VERSION = fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf8').trim().split(/\s+/)[0]; } catch { try { VERSION = require('./package.json').version; } catch {} }
+const UPDATE_RAW = process.env.CULTE_UPDATE_RAW || 'https://raw.githubusercontent.com/comVPV/projection-culte/main';
+const UPDATE_ZIP = process.env.CULTE_UPDATE_ZIP || 'https://github.com/comVPV/projection-culte/archive/refs/heads/main.zip';
 const MEDIA = path.join(DATA, 'media');
 const FONTS = path.join(DATA, 'fonts');
 const SONGS_FILE = path.join(DATA, 'songs.json');
 const STATE_FILE = path.join(DATA, 'state.json');
 fs.mkdirSync(MEDIA, { recursive: true });
 fs.mkdirSync(FONTS, { recursive: true });
+fs.mkdirSync(BIBLES, { recursive: true });
 
 const readJSON = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
 const writeJSON = (f, o) => { fs.writeFileSync(f + '.tmp', JSON.stringify(o, null, 1)); fs.renameSync(f + '.tmp', f); };
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+let uidN = 0;
+const uid = () => Date.now().toString(36) + (uidN++).toString(36) + Math.random().toString(36).slice(2, 5);
 
 // ---------------- État ----------------
 const DEFAULT_THEME = {
   font: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  verse: { size: 58, color: '#ffffff', bg: '#101820', bgAlpha: 0.85, refColor: '#f5c542', bgImage: '' },
+  verse: { size: 58, color: '#ffffff', bg: '#101820', bgAlpha: 0.85, refColor: '#f5c542', refSize: 52, bgImage: '' },
   lyrics: { size: 78, color: '#ffffff', outline: '#000000', weight: 700, upper: false },
   media: { panel: '#101820', bgImage: '', camWidth: 640, imgScale: 100, pipSize: 560 },
-  monitor: { size: 96, color: '#ffffff', bg: '#000000', refColor: '#f5c542', bgImage: '' },
+  monitor: { size: 96, color: '#ffffff', bg: '#000000', refColor: '#f5c542', refSize: 52, bgImage: '', chronoSize: 64, chronoColor: '#ffffff', chronoPos: 'tr' },
+  lower: { size: 44, color: '#ffffff', bg: '#101820', bgAlpha: 0.88, accent: '#f5c542', pos: 'left' },
 };
+const DEFAULT_SECTIONS = ['Bienvenue', 'Intercession', 'Louange', 'Annonces', 'Adoration', 'Enseignement', 'Réponse à la Parole', 'Sainte Cène', 'Offrandes', 'Accueil des nouveaux', 'Annonces pastorales', 'Résumé du culte', 'Bénédiction finale'];
+const mkSections = (titles = DEFAULT_SECTIONS) => titles.map(t => ({ id: uid(), title: t, items: [] }));
+const cloneSections = secs => (secs || []).map(s => ({ id: uid(), title: String(s.title || 'Section').slice(0, 60), items: (s.items || []).map(({ id, ...rest }) => ({ id: uid(), ...rest })) }));
+function normPlan(p) {
+  let pl;
+  if (p && Array.isArray(p.sections) && p.sections.length) {
+    pl = { name: String(p.name || 'Culte'), sections: p.sections.map(s => ({ id: s.id || uid(), title: String(s.title || 'Section'), items: (s.items || []).map(i => ({ ...i, id: i.id || uid() })) })) };
+  } else {
+    pl = { name: 'Culte', sections: mkSections() };
+    if (p && Array.isArray(p.items)) pl.sections[0].items = p.items.map(i => ({ ...i, id: i.id || uid() }));
+  }
+  pl.cursor = null;
+  pl.target = (pl.sections.find(s => s.id === (p && p.target)) || pl.sections[0]).id;
+  return pl;
+}
 const saved = readJSON(STATE_FILE, {});
 function mergeTheme(st = {}) {
   const t = { font: st.font || (st.verse && st.verse.font) || DEFAULT_THEME.font };
-  for (const g of ['verse', 'lyrics', 'media', 'monitor']) { t[g] = { ...DEFAULT_THEME[g], ...(st[g] || {}) }; delete t[g].font; }
+  for (const g of ['verse', 'lyrics', 'media', 'monitor', 'lower']) { t[g] = { ...DEFAULT_THEME[g], ...(st[g] || {}) }; delete t[g].font; }
   return t;
 }
 const state = {
   live: {
     verse: { on: false, layout: 'lower' },
     lyrics: { on: false, layout: 'bottom' },
-    media: { on: false, layout: 'full' },
+    media: { on: false, layout: 'full', kind: 'image', src: '', name: '', card: null, video: { playing: true, loop: false, muted: false, rev: 0 } },
+    lower: { on: false, title: '', sub: '' },
   },
   theme: mergeTheme(saved.theme),
-  prefs: { versions: ['kjv'], autoHide: true, directClick: false, ...(saved.prefs || {}) },
-  plan: saved.plan || { items: [], cursor: -1 },
+  prefs: { versions: ['kjv'], autoHide: true, directClick: false, backupDir: '', ...(saved.prefs || {}) },
+  plan: normPlan(saved.plan),
+  lowers: Array.isArray(saved.lowers) ? saved.lowers : [],
+  chrono: { running: false, base: 0, startedAt: 0, visible: true, now: 0 },
+  update: { current: VERSION, latest: '', available: false, checking: false, installing: false, error: '', canRollback: false },
+  backup: { dir: '', last: 0, count: 0, error: '' },
   guide: false,
   fonts: [],
   background: { src: '', type: '', dim: 0.35, ...(saved.background || {}) },
@@ -54,7 +83,6 @@ if (saved.prefs) {
   if (saved.prefs.lyrics) state.live.lyrics.layout = saved.prefs.lyrics;
   if (saved.prefs.media) state.live.media.layout = saved.prefs.media;
 }
-state.plan.cursor = -1;
 
 const FONT_EXT = /\.(ttf|otf|woff2?)$/i;
 function refreshFonts() { state.fonts = fs.readdirSync(FONTS).filter(f => FONT_EXT.test(f)).map(f => f.replace(FONT_EXT, '')).sort((a, b) => a.localeCompare(b)); }
@@ -63,10 +91,11 @@ refreshFonts();
 let saveTimer = null;
 function persist() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => writeJSON(STATE_FILE, { theme: state.theme, prefs: state.prefs, plan: state.plan, background: state.background }), 400);
+  saveTimer = setTimeout(() => writeJSON(STATE_FILE, { theme: state.theme, prefs: state.prefs, plan: { ...state.plan, cursor: null }, lowers: state.lowers, background: state.background }), 400);
 }
 
 const loadSongs = () => readJSON(SONGS_FILE, []);
+const loadPlans = () => readJSON(PLANS_FILE, []);
 
 // ---------------- Commandes ----------------
 function showVerse(a) {
@@ -93,25 +122,68 @@ function showSection(songId, section) {
   const s = loadSongs().find(x => x.id === songId);
   if (!s) throw new Error('Chant introuvable');
   const i = Math.max(0, Math.min(section, s.sections.length - 1));
-  state.live.lyrics = { ...state.live.lyrics, on: true, songId, title: s.title, section: i, total: s.sections.length, lines: s.sections[i].split('\n') };
+  state.live.lyrics = { ...state.live.lyrics, on: true, songId, title: s.title, section: i, total: s.sections.length, label: (s.labels || [])[i] || '', lines: s.sections[i].split('\n') };
+}
+
+const VID = /\.(mp4|webm|mov|m4v)$/i;
+const cardOf = c => {
+  c = c || {};
+  const f = k => String(c[k] || '').trim().slice(0, k === 'extra' ? 400 : 120);
+  const card = { title: f('title'), date: f('date'), dateISO: f('dateISO'), time: f('time'), timeRaw: f('timeRaw'), place: f('place'), speaker: f('speaker'), extra: f('extra') };
+  if (!card.title || !card.date || !card.time || !card.place) throw new Error('Annonce incomplète : le titre, la date, l\'heure et le lieu sont obligatoires');
+  return card;
+};
+function showMedia(a) {
+  const prev = state.live.media;
+  const kind = a.kind || (a.card ? 'card' : VID.test(a.src || '') ? 'video' : 'image');
+  if (kind !== 'card' && !a.src) throw new Error('Aucun fichier à afficher');
+  const card = kind === 'card' ? cardOf(a.card) : null;
+  state.live.media = {
+    ...prev, on: true, kind, src: kind === 'card' ? '' : a.src, name: a.name || (card ? card.title : ''), layout: a.layout || prev.layout, card,
+    video: { playing: true, loop: !!prev.video.loop, muted: !!prev.video.muted, rev: (prev.video.rev || 0) + 1 },
+  };
 }
 
 function hideAll() {
-  state.live.verse.on = false; state.live.lyrics.on = false; state.live.media.on = false;
+  state.live.verse.on = false; state.live.lyrics.on = false; state.live.media.on = false; state.live.lower.on = false;
 }
 
-function goPlan(index, startAt) {
-  const it = state.plan.items[index];
-  if (!it) return;
+function findItem(id) {
+  for (const s of state.plan.sections) { const i = s.items.findIndex(x => x.id === id); if (i >= 0) return { s, i, it: s.items[i] }; }
+  return null;
+}
+const allItems = () => state.plan.sections.flatMap(s => s.items);
+
+function cleanItem(item) {
+  const { id, ...it } = item || {};
+  it.label = String(it.label || '').slice(0, 120);
+  if (it.type === 'announce') {
+    if (it.mode === 'card') it.card = cardOf(it.card); else { delete it.card; if (!it.src) throw new Error('Choisis un visuel pour cette annonce'); }
+    if (!it.label) it.label = it.mode === 'card' ? it.card.title : (it.src.split('/').pop() || 'Annonce');
+  }
+  if (it.type === 'lower') { it.title = String(it.title || '').slice(0, 120); it.sub = String(it.sub || '').slice(0, 160); if (!it.title) throw new Error('Le bandeau a besoin d\'un titre'); if (!it.label) it.label = it.title; }
+  if (!['song', 'verse', 'media', 'announce', 'lower', 'note'].includes(it.type)) throw new Error('Type d\'élément inconnu');
+  return it;
+}
+
+function goPlan(id, startAt) {
+  const f = findItem(id);
+  if (!f) return;
+  const it = f.it;
   hideAll();
-  state.plan.cursor = index;
+  state.plan.cursor = id; state.plan.target = f.s.id;
   if (it.type === 'song') {
     const s = loadSongs().find(x => x.id === it.songId);
     if (s) showSection(it.songId, startAt === 'last' ? s.sections.length - 1 : 0);
   } else if (it.type === 'verse') {
     showVerse({ ref: it.ref, p: it.p, versions: it.versions, layout: it.layout });
   } else if (it.type === 'media') {
-    state.live.media = { ...state.live.media, on: true, src: it.src, name: it.label, layout: it.layout || state.live.media.layout };
+    showMedia({ src: it.src, name: it.label, layout: it.layout });
+  } else if (it.type === 'announce') {
+    if (it.mode === 'card') showMedia({ kind: 'card', card: it.card, name: it.label, layout: it.layout });
+    else showMedia({ src: it.src, name: it.label, layout: it.layout });
+  } else if (it.type === 'lower') {
+    state.live.lower = { on: true, title: it.title, sub: it.sub || '' };
   }
 }
 
@@ -121,9 +193,23 @@ function step(dir) {
     const ns = ly.section + dir;
     if (ns >= 0 && ns < ly.total) { showSection(ly.songId, ns); return; }
   }
-  const i = state.plan.cursor + dir;
-  if (i >= 0 && i < state.plan.items.length) goPlan(i, dir < 0 ? 'last' : 'first');
+  const fl = allItems();
+  if (!fl.length) return;
+  const cur = fl.findIndex(x => x.id === state.plan.cursor);
+  const i = cur < 0 ? (dir > 0 ? 0 : -1) : cur + dir;
+  if (i >= 0 && i < fl.length) goPlan(fl[i].id, dir < 0 ? 'last' : 'first');
 }
+
+function loadPlan(id) {
+  let secs;
+  if (id === 'default') secs = mkSections();
+  else if (id === 'template') { const t = loadPlans().find(x => x.template); secs = t ? cloneSections(t.sections) : mkSections(); }
+  else { const e = loadPlans().find(x => x.id === id); if (!e) throw new Error('Culte introuvable'); secs = cloneSections(e.sections); state.plan.name = e.name; }
+  const name = id === 'default' || id === 'template' ? 'Culte' : state.plan.name;
+  state.plan = normPlan({ name, sections: secs });
+}
+
+function chronoMs() { const c = state.chrono; return c.base + (c.running ? Date.now() - c.startedAt : 0); }
 
 function handle(cmd, a) {
   const L = state.live;
@@ -133,11 +219,37 @@ function handle(cmd, a) {
     case 'verse.hide': L.verse.on = false; break;
     case 'lyrics.show': showSection(a.songId, a.section | 0); break;
     case 'lyrics.hide': L.lyrics.on = false; break;
-    case 'media.show': L.media = { ...L.media, on: true, src: a.src, name: a.name || '', layout: a.layout || L.media.layout }; break;
+    case 'media.show': showMedia(a); break;
     case 'media.hide': L.media.on = false; break;
+    case 'media.video': {
+      const v = L.media.video;
+      if (a.playing != null) v.playing = !!a.playing;
+      if (a.loop != null) v.loop = !!a.loop;
+      if (a.muted != null) v.muted = !!a.muted;
+      if (a.restart) { v.rev++; v.playing = true; }
+      break;
+    }
+    case 'lower.show': {
+      const title = String(a.title || '').trim().slice(0, 120);
+      if (!title) throw new Error('Écris au moins un titre pour le bandeau');
+      L.lower = { on: true, title, sub: String(a.sub || '').trim().slice(0, 160) };
+      break;
+    }
+    case 'lower.hide': L.lower.on = false; break;
+    case 'lowers.add': {
+      const title = String(a.title || '').trim().slice(0, 120); if (!title) throw new Error('Écris au moins un titre');
+      const sub = String(a.sub || '').trim().slice(0, 160);
+      if (!state.lowers.some(x => x.title === title && x.sub === sub)) state.lowers.push({ id: uid(), title, sub });
+      break;
+    }
+    case 'lowers.remove': state.lowers = state.lowers.filter(x => x.id !== a.id); break;
+    case 'chrono.start': if (!state.chrono.running) { state.chrono.running = true; state.chrono.startedAt = Date.now(); } break;
+    case 'chrono.pause': if (state.chrono.running) { state.chrono.base = chronoMs(); state.chrono.running = false; } break;
+    case 'chrono.reset': state.chrono.base = 0; state.chrono.running = false; state.chrono.startedAt = 0; break;
+    case 'chrono.visible': state.chrono.visible = !!a.on; break;
     case 'hide.all': hideAll(); break;
     case 'layout.set':
-      if (!L[a.kind]) break;
+      if (!L[a.kind] || a.kind === 'lower') break;
       L[a.kind].layout = a.layout; state.prefs[a.kind] = a.layout; break;
     case 'versions.set': state.prefs.versions = a.versions || []; break;
     case 'bg.set': state.background = { ...state.background, src: a.src, type: a.type === 'video' ? 'video' : 'image' }; break;
@@ -151,34 +263,215 @@ function handle(cmd, a) {
     case 'theme.reset': state.theme = mergeTheme(); break;
     case 'prefs.set':
       if (['autoHide', 'directClick'].includes(a.key)) state.prefs[a.key] = !!a.value;
+      if (a.key === 'backupDir') { state.prefs.backupDir = String(a.value || '').trim().slice(0, 500); syncBackup(); }
       break;
     case 'step': step(a.dir > 0 ? 1 : -1); break;
-    case 'plan.add': state.plan.items.push({ id: uid(), ...a.item }); break;
+    // ----- déroulé -----
+    case 'plan.add': {
+      const sec = state.plan.sections.find(s => s.id === (a.sec || state.plan.target)) || state.plan.sections[0];
+      if (!sec) throw new Error('Ajoute d\'abord une section');
+      sec.items.push({ id: uid(), ...cleanItem(a.item) });
+      state.plan.target = sec.id;
+      break;
+    }
+    case 'plan.update': {
+      const f = findItem(a.id); if (!f) break;
+      f.s.items[f.i] = { id: a.id, ...cleanItem({ ...f.it, ...a.item, type: f.it.type }) };
+      break;
+    }
     case 'plan.remove': {
-      const i = state.plan.items.findIndex(x => x.id === a.id);
-      if (i >= 0) { state.plan.items.splice(i, 1); if (state.plan.cursor >= i) state.plan.cursor--; }
+      const f = findItem(a.id);
+      if (f) { f.s.items.splice(f.i, 1); if (state.plan.cursor === a.id) state.plan.cursor = null; }
       break;
     }
     case 'plan.move': {
-      const it = state.plan.items, i = it.findIndex(x => x.id === a.id), j = i + (a.dir > 0 ? 1 : -1);
-      if (i >= 0 && j >= 0 && j < it.length) {
-        [it[i], it[j]] = [it[j], it[i]];
-        if (state.plan.cursor === i) state.plan.cursor = j; else if (state.plan.cursor === j) state.plan.cursor = i;
+      const f = findItem(a.id); if (!f) break;
+      const secs = state.plan.sections, si = secs.indexOf(f.s), its = f.s.items;
+      if (a.dir < 0) {
+        if (f.i > 0) [its[f.i - 1], its[f.i]] = [its[f.i], its[f.i - 1]];
+        else if (si > 0) { its.splice(f.i, 1); secs[si - 1].items.push(f.it); }
+      } else {
+        if (f.i < its.length - 1) [its[f.i + 1], its[f.i]] = [its[f.i], its[f.i + 1]];
+        else if (si < secs.length - 1) { its.splice(f.i, 1); secs[si + 1].items.unshift(f.it); }
       }
       break;
     }
-    case 'plan.go': goPlan(a.index | 0); break;
-    case 'plan.clear': state.plan = { items: [], cursor: -1 }; break;
+    case 'plan.go': goPlan(a.id); break;
+    case 'plan.target': if (state.plan.sections.some(s => s.id === a.sec)) state.plan.target = a.sec; break;
+    case 'plan.name': state.plan.name = String(a.name || 'Culte').slice(0, 80); break;
+    case 'plan.section.add': {
+      const sec = { id: uid(), title: String(a.title || 'Nouvelle section').slice(0, 60), items: [] };
+      state.plan.sections.push(sec); state.plan.target = sec.id; break;
+    }
+    case 'plan.section.rename': { const s = state.plan.sections.find(x => x.id === a.sec); if (s && a.title) s.title = String(a.title).slice(0, 60); break; }
+    case 'plan.section.remove': {
+      if (state.plan.sections.length <= 1) throw new Error('Il faut garder au moins une section');
+      const i = state.plan.sections.findIndex(x => x.id === a.sec);
+      if (i >= 0) {
+        const [gone] = state.plan.sections.splice(i, 1);
+        if (gone.items.some(x => x.id === state.plan.cursor)) state.plan.cursor = null;
+        if (state.plan.target === a.sec) state.plan.target = state.plan.sections[Math.min(i, state.plan.sections.length - 1)].id;
+      }
+      break;
+    }
+    case 'plan.section.move': {
+      const secs = state.plan.sections, i = secs.findIndex(x => x.id === a.sec), j = i + (a.dir > 0 ? 1 : -1);
+      if (i >= 0 && j >= 0 && j < secs.length) [secs[i], secs[j]] = [secs[j], secs[i]];
+      break;
+    }
+    case 'plan.clear': state.plan.sections.forEach(s => { s.items = []; }); state.plan.cursor = null; break;
+    case 'plan.load': hideAll(); loadPlan(a.id || 'template'); break;
     default: throw new Error('Commande inconnue : ' + cmd);
   }
   persist();
+}
+
+// ---------------- Sauvegarde des Bibles ----------------
+function syncBackup() {
+  const b = state.backup, dir = (state.prefs.backupDir || '').trim();
+  b.dir = dir; b.error = '';
+  if (!dir) { b.count = 0; return; }
+  try {
+    if (!path.isAbsolute(dir)) throw new Error('indique le chemin complet du dossier');
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new Error('ce dossier n\'existe pas sur cet ordinateur');
+    const dest = path.join(dir, 'projection-culte-bibles');
+    if (!fs.existsSync(dest)) fs.mkdirSync(dest);
+    for (const f of fs.readdirSync(BIBLES).filter(f => f.endsWith('.json'))) {
+      const src = path.join(BIBLES, f), dst = path.join(dest, f), ss = fs.statSync(src);
+      let same = false;
+      try { const ds = fs.statSync(dst); same = ds.size === ss.size && ds.mtimeMs >= ss.mtimeMs; } catch {}
+      if (!same) fs.copyFileSync(src, dst);
+    }
+    b.last = Date.now(); b.count = fs.readdirSync(dest).filter(f => f.endsWith('.json')).length;
+  } catch (e) { b.error = 'Dossier inutilisable : ' + e.message; }
+}
+
+async function bibleZip() {
+  const zip = new JSZip();
+  for (const f of fs.readdirSync(BIBLES).filter(f => f.endsWith('.json'))) zip.file('bibles/' + f, fs.readFileSync(path.join(BIBLES, f)));
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+}
+
+async function restoreZip(buf) {
+  const zip = await JSZip.loadAsync(buf);
+  const done = [];
+  for (const n of Object.keys(zip.files)) {
+    if (zip.files[n].dir || !/\.json$/i.test(n)) continue;
+    try { done.push(bible.storeRaw(await zip.files[n].async('nodebuffer')).name); } catch {}
+  }
+  if (!done.length) throw new Error('Aucune Bible valide trouvée dans ce zip');
+  syncBackup();
+  return done;
+}
+
+function restoreFromFolder() {
+  const dir = (state.prefs.backupDir || '').trim();
+  if (!dir) throw new Error('Aucun dossier de sauvegarde défini');
+  const src = path.join(dir, 'projection-culte-bibles');
+  if (!fs.existsSync(src)) throw new Error('Aucune sauvegarde dans ce dossier');
+  const have = new Set(fs.readdirSync(BIBLES));
+  const added = [];
+  for (const f of fs.readdirSync(src).filter(f => f.endsWith('.json') && !have.has(f))) { try { added.push(bible.storeRaw(fs.readFileSync(path.join(src, f))).name); } catch {} }
+  return added;
+}
+
+// ---------------- Mise à jour (GitHub) ----------------
+function httpGet(url, redirects = 5) {
+  return new Promise((resolve, reject) => {
+    const lib = url.startsWith('https') ? require('https') : http;
+    const req = lib.get(url, { headers: { 'User-Agent': 'culte-projection', 'Cache-Control': 'no-cache' }, timeout: 30000 }, res => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) { res.resume(); return resolve(httpGet(new URL(res.headers.location, url).href, redirects - 1)); }
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error('réponse ' + res.statusCode)); }
+      const ch = []; res.on('data', c => ch.push(c)); res.on('end', () => resolve(Buffer.concat(ch))); res.on('error', reject);
+    });
+    req.on('timeout', () => req.destroy(new Error('délai dépassé')));
+    req.on('error', reject);
+  });
+}
+const cmpVer = (a, b) => { const x = String(a).split('.').map(n => parseInt(n) || 0), y = String(b).split('.').map(n => parseInt(n) || 0); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); return 0; };
+const OLD_DIR = path.join(ROOT, '_old');
+const SKIP_UPDATE = /^(data\/|node_modules\/|_old\/|\.git|\.claude)/;
+
+async function checkUpdate() {
+  const u = state.update;
+  if (u.installing) return;
+  u.checking = true; u.error = ''; broadcast();
+  try {
+    const v = (await httpGet(UPDATE_RAW + '/VERSION?_=' + Date.now())).toString().trim().split(/\s+/)[0];
+    if (!/^\d+\.\d+\.\d+$/.test(v)) throw new Error('numéro de version illisible');
+    u.latest = v; u.available = cmpVer(v, VERSION) > 0;
+  } catch (e) { u.error = 'Impossible de vérifier les mises à jour (' + e.message + ')'; }
+  u.checking = false; u.canRollback = fs.existsSync(OLD_DIR) && fs.readdirSync(OLD_DIR).length > 0;
+  broadcast();
+}
+
+function restart() {
+  setTimeout(() => {
+    if (process.env.CULTE_LOOP) process.exit(42);
+    require('child_process').spawn(process.execPath, [path.join(ROOT, 'server.js')], { cwd: ROOT, detached: true, stdio: 'ignore', env: process.env }).unref();
+    process.exit(0);
+  }, 1200);
+}
+
+function depsOf(file) { try { return JSON.stringify(JSON.parse(fs.readFileSync(file, 'utf8')).dependencies || {}); } catch { return ''; } }
+
+function copyBack(srcDir) {
+  const walk = (d, rel = '') => fs.readdirSync(d, { withFileTypes: true }).forEach(e => {
+    const r = rel ? rel + '/' + e.name : e.name;
+    if (e.isDirectory()) walk(path.join(d, e.name), r);
+    else { const dst = path.join(ROOT, r); fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.copyFileSync(path.join(d, e.name), dst); }
+  });
+  walk(srcDir);
+}
+
+async function installUpdate() {
+  const u = state.update;
+  if (u.installing) throw new Error('Mise à jour déjà en cours');
+  u.installing = true; u.error = ''; broadcast();
+  try {
+    const zip = await JSZip.loadAsync(await httpGet(UPDATE_ZIP));
+    const names = Object.keys(zip.files).filter(n => !zip.files[n].dir);
+    const prefix = (names.find(n => /(^|\/)server\.js$/.test(n)) || '').replace(/server\.js$/, '');
+    if (!names.includes(prefix + 'server.js') || !names.includes(prefix + 'VERSION')) throw new Error('archive inattendue');
+    const files = names.filter(n => n.startsWith(prefix)).map(n => n.slice(prefix.length)).filter(n => n && !n.includes('..') && !SKIP_UPDATE.test(n));
+    const newVer = (await zip.file(prefix + 'VERSION').async('string')).trim().split(/\s+/)[0];
+    // version précédente conservée pour pouvoir revenir en arrière
+    fs.rmSync(OLD_DIR, { recursive: true, force: true });
+    const keep = path.join(OLD_DIR, VERSION);
+    for (const f of files) { const cur = path.join(ROOT, f); if (fs.existsSync(cur)) { fs.mkdirSync(path.dirname(path.join(keep, f)), { recursive: true }); fs.copyFileSync(cur, path.join(keep, f)); } }
+    const depsBefore = depsOf(path.join(ROOT, 'package.json'));
+    for (const f of files) {
+      const dst = path.join(ROOT, f); fs.mkdirSync(path.dirname(dst), { recursive: true });
+      fs.writeFileSync(dst, await zip.file(prefix + f).async('nodebuffer'));
+      if (/\.(command|sh)$/.test(f)) { try { fs.chmodSync(dst, 0o755); } catch {} }
+    }
+    if (depsOf(path.join(ROOT, 'package.json')) !== depsBefore) {
+      try {
+        await new Promise((res, rej) => require('child_process').exec('npm install --omit=dev --no-audit --no-fund', { cwd: ROOT, timeout: 240000, shell: true }, (err, so, se) => err ? rej(new Error(String(se || err.message).slice(0, 200))) : res()));
+      } catch (e) { copyBack(keep); throw new Error('installation des composants impossible : ' + e.message); }
+    }
+    u.installing = false; u.available = false; u.current = newVer; u.canRollback = true; broadcast();
+    restart();
+    return { ok: true, version: newVer };
+  } catch (e) {
+    u.installing = false; u.error = 'Mise à jour impossible : ' + e.message; broadcast();
+    throw new Error(u.error);
+  }
+}
+
+function rollbackUpdate() {
+  const vs = fs.existsSync(OLD_DIR) ? fs.readdirSync(OLD_DIR) : [];
+  if (!vs.length) throw new Error('Aucune version précédente conservée');
+  copyBack(path.join(OLD_DIR, vs[0]));
+  restart();
+  return { ok: true, version: vs[0] };
 }
 
 // ---------------- HTTP ----------------
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
-  '.webp': 'image/webp', '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.mp4': 'video/mp4', '.webm': 'video/webm',
+  '.webp': 'image/webp', '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/mp4', '.m4v': 'video/mp4',
 };
 
 function readBody(req, limit = 600e6) {
@@ -187,6 +480,18 @@ function readBody(req, limit = 600e6) {
     req.on('data', c => { n += c.length; if (n > limit) { rej(new Error('Fichier trop gros')); req.destroy(); } else ch.push(c); });
     req.on('end', () => res(Buffer.concat(ch)));
     req.on('error', rej);
+  });
+}
+
+function saveUpload(req, file, limit = 3e9) {
+  return new Promise((res, rej) => {
+    const out = fs.createWriteStream(file); let n = 0, over = false, done = false;
+    const fail = e => { if (done) return; done = true; out.destroy(); fs.unlink(file, () => {}); rej(e); };
+    req.on('data', c => { n += c.length; if (n > limit && !over) { over = true; fail(new Error('Fichier trop gros (3 Go maximum)')); } });
+    req.on('aborted', () => fail(new Error('Envoi interrompu')));
+    req.on('error', fail); out.on('error', fail);
+    out.on('finish', () => { if (!done) { done = true; res(n); } });
+    req.pipe(out);
   });
 }
 
@@ -246,7 +551,9 @@ const server = http.createServer(async (req, res) => {
       if (p === '/api/bibles' && req.method === 'GET') return send(res, 200, bible.list());
       if (p === '/api/bible/import' && req.method === 'POST') {
         const buf = await readBody(req);
-        return send(res, 200, bible.importData(buf, { id: q.get('id'), name: q.get('name'), abbr: q.get('abbr'), lang: q.get('lang') }));
+        const r = bible.importData(buf, { id: q.get('id'), name: q.get('name'), abbr: q.get('abbr'), lang: q.get('lang') });
+        syncBackup(); broadcast();
+        return send(res, 200, r);
       }
       if (p === '/api/verse' && req.method === 'GET') {
         const pr = q.get('b') != null ? { book: +q.get('b'), chapter: +q.get('c'), v1: +q.get('v1'), v2: +(q.get('v2') || q.get('v1')) } : bible.parseRef(q.get('ref'));
@@ -274,11 +581,12 @@ const server = http.createServer(async (req, res) => {
         const s = JSON.parse((await readBody(req)).toString('utf8'));
         const songs = loadSongs();
         s.title = String(s.title || 'Sans titre').trim();
-        s.sections = (s.sections || []).map(x => String(x).trim()).filter(Boolean);
-        if (!s.sections.length) return send(res, 400, { error: 'Le chant est vide' });
-        if (!s.id) s.id = uid();
-        const i = songs.findIndex(x => x.id === s.id);
-        if (i >= 0) songs[i] = { id: s.id, title: s.title, sections: s.sections }; else songs.push({ id: s.id, title: s.title, sections: s.sections });
+        const pairs = (s.sections || []).map((x, k) => ({ t: String(x).trim(), l: String((s.labels || [])[k] || '').trim().slice(0, 40) })).filter(x => x.t);
+        if (!pairs.length) return send(res, 400, { error: 'Le chant est vide' });
+        const rec = { id: s.id || uid(), title: s.title, sections: pairs.map(x => x.t), labels: pairs.map(x => x.l) };
+        const i = songs.findIndex(x => x.id === rec.id);
+        if (i >= 0) songs[i] = rec; else songs.push(rec);
+        s.id = rec.id;
         songs.sort((a, b) => a.title.localeCompare(b.title, 'fr'));
         writeJSON(SONGS_FILE, songs);
         broadcast();
@@ -295,21 +603,44 @@ const server = http.createServer(async (req, res) => {
       }
       if (p === '/api/media' && req.method === 'GET') {
         const files = fs.readdirSync(MEDIA).filter(f => MIME[path.extname(f).toLowerCase()])
-          .map(f => ({ name: f, url: '/media/' + encodeURIComponent(f), type: /\.(mp4|webm)$/i.test(f) ? 'video' : 'image', t: fs.statSync(path.join(MEDIA, f)).mtimeMs }))
+          .map(f => ({ name: f, url: '/media/' + encodeURIComponent(f), type: VID.test(f) ? 'video' : 'image', t: fs.statSync(path.join(MEDIA, f)).mtimeMs }))
           .sort((a, b) => b.t - a.t);
         return send(res, 200, files);
       }
       if (p === '/api/media' && req.method === 'POST') {
         let name = safeName(q.get('name'));
-        if (!MIME[path.extname(name).toLowerCase()]) return send(res, 400, { error: 'Type de fichier non géré (png, jpg, webp, gif, svg, mp4, webm)' });
+        const ext = path.extname(name).toLowerCase();
+        if (!MIME[ext] || /^\.(html|js|css|json|ttf|otf|woff2?)$/.test(ext)) return send(res, 400, { error: 'Type de fichier non géré (png, jpg, webp, gif, svg, mp4, webm, mov)' });
         if (fs.existsSync(path.join(MEDIA, name))) name = Date.now() + '_' + name;
-        fs.writeFileSync(path.join(MEDIA, name), await readBody(req));
+        await saveUpload(req, path.join(MEDIA, name));
         return send(res, 200, { name, url: '/media/' + encodeURIComponent(name) });
       }
       if (p === '/api/media' && req.method === 'DELETE') {
         try { fs.unlinkSync(path.join(MEDIA, safeName(q.get('name')))); } catch {}
         return send(res, 200, { ok: true });
       }
+      if (p === '/api/plans' && req.method === 'GET') return send(res, 200, loadPlans().map(x => ({ id: x.id, name: x.name, template: !!x.template, items: x.sections.reduce((n, s) => n + s.items.length, 0), t: x.t })).sort((a, b) => (b.template - a.template) || b.t - a.t));
+      if (p === '/api/plans' && req.method === 'POST') {
+        const b = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+        const plans = loadPlans();
+        const entry = { id: b.template ? 'template' : uid(), name: b.template ? 'Modèle' : String(b.name || state.plan.name || 'Culte').trim().slice(0, 80), template: !!b.template, sections: cloneSections(state.plan.sections), t: Date.now() };
+        const i = plans.findIndex(x => b.template ? x.template : (!x.template && x.name === entry.name));
+        if (i >= 0) { entry.id = plans[i].id; plans[i] = entry; } else plans.push(entry);
+        writeJSON(PLANS_FILE, plans);
+        if (!b.template) { state.plan.name = entry.name; persist(); broadcast(); }
+        return send(res, 200, { id: entry.id, name: entry.name });
+      }
+      if (p === '/api/plans' && req.method === 'DELETE') { writeJSON(PLANS_FILE, loadPlans().filter(x => x.id !== q.get('id'))); return send(res, 200, { ok: true }); }
+      if (p === '/api/update/check' && req.method === 'GET') { await checkUpdate(); return send(res, 200, state.update); }
+      if (p === '/api/update/install' && req.method === 'POST') return send(res, 200, await installUpdate());
+      if (p === '/api/update/rollback' && req.method === 'POST') return send(res, 200, rollbackUpdate());
+      if (p === '/api/backup/bibles' && req.method === 'GET') {
+        const buf = await bibleZip();
+        res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': buf.length, 'Content-Disposition': 'attachment; filename="sauvegarde-bibles-' + new Date().toISOString().slice(0, 10) + '.zip"' });
+        return res.end(buf);
+      }
+      if (p === '/api/backup/restore' && req.method === 'POST') { const names = await restoreZip(await readBody(req)); broadcast(); return send(res, 200, { restored: names }); }
+      if (p === '/api/backup/restore-folder' && req.method === 'POST') { const added = restoreFromFolder(); broadcast(); return send(res, 200, { restored: added }); }
       return send(res, 404, { error: 'Route inconnue' });
     }
     if (p === '/fonts.css') {
@@ -331,11 +662,14 @@ const server = http.createServer(async (req, res) => {
 
 // ---------------- WebSocket ----------------
 const wss = new WebSocketServer({ server });
+wss.on('error', () => {});
 function broadcast() {
+  state.chrono.now = Date.now();
   const msg = JSON.stringify({ type: 'state', state });
   for (const c of wss.clients) if (c.readyState === 1) c.send(msg);
 }
 wss.on('connection', ws => {
+  state.chrono.now = Date.now();
   ws.send(JSON.stringify({ type: 'state', state }));
   ws.on('message', raw => {
     try {
@@ -348,11 +682,21 @@ wss.on('connection', ws => {
   });
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log('\n  Projection du culte — prêt\n');
+let listenTries = 0;
+server.on('error', e => {
+  if (e.code === 'EADDRINUSE' && listenTries++ < 20) return setTimeout(() => server.listen(PORT, '0.0.0.0'), 500);
+  console.error(e.code === 'EADDRINUSE' ? '\n  Le port ' + PORT + ' est déjà utilisé : l\'appli est peut-être déjà ouverte.\n' : e.message);
+  process.exit(1);
+});
+server.on('listening', () => {
+  console.log('\n  Projection du culte v' + VERSION + ' — prêt\n');
   console.log('  Régie  :  http://localhost:' + PORT + '/');
   for (const list of Object.values(os.networkInterfaces())) for (const i of list || []) {
     if (i.family === 'IPv4' && !i.internal) console.log('  Réseau :  http://' + i.address + ':' + PORT + '/   (sortie : /output.html)');
   }
   console.log('\n  Ctrl+C pour arrêter.\n');
+  syncBackup();
+  try { state.update.canRollback = fs.existsSync(OLD_DIR) && fs.readdirSync(OLD_DIR).length > 0; } catch {}
+  if (!process.env.CULTE_NO_UPDATE_CHECK) { setTimeout(checkUpdate, 4000); setInterval(checkUpdate, 6 * 3600e3); }
 });
+server.listen(PORT, '0.0.0.0');

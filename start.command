@@ -1,3 +1,7 @@
 #!/bin/bash
 cd "$(dirname "$0")"
-node server.js
+export CULTE_LOOP=1
+while true; do
+  node server.js
+  [ $? -eq 42 ] || break
+done

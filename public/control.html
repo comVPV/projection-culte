@@ -71,6 +71,25 @@
   .vrow { display:flex; gap:10px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin:4px 0; cursor:pointer; background:#10141b; }
   .vrow:hover { border-color:var(--acc); } .vrow.sel { border-color:var(--acc); background:#1b2a47; } .vrow.live { border-color:var(--live); background:#2b2024; }
   .vrow b { color:#f5c542; min-width:26px; text-align:right; }
+  .lbl.tight { margin:10px 0 2px; }
+  .btnlink { display:inline-block; background:#272e3c; color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:4px 8px; font-size:13px; text-decoration:none; }
+  .upd { background:#1d3a6b; border-bottom:1px solid #2f5aa8; padding:9px 16px; display:none; align-items:center; gap:10px; flex-wrap:wrap; }
+  .chw { display:inline-flex; align-items:center; gap:6px; background:#10141b; border:1px solid var(--line); border-radius:8px; padding:3px 8px; }
+  .chw b { font-variant-numeric:tabular-nums; font-size:16px; min-width:54px; text-align:center; }
+  .chw label { display:flex; align-items:center; gap:3px; } .chw input { width:auto; }
+  .psec { border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin:10px 0; }
+  .psec.target { border-color:var(--acc); }
+  .phead { display:flex; align-items:center; gap:6px; flex-wrap:wrap; cursor:pointer; }
+  .phead b { flex:1; min-width:120px; }
+  .item .t .hint { margin-top:1px; }
+  .ovl { position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:20; display:flex; align-items:flex-start; justify-content:center; padding:5vh 12px; overflow:auto; }
+  .mdl { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; width:min(560px,100%); }
+  .mdl h3 { margin:0 0 10px; font-size:16px; } .mdl .mb > * { margin-top:8px; } .mdl .mf { display:flex; gap:8px; justify-content:flex-end; margin-top:14px; flex-wrap:wrap; }
+  .lab { display:block; width:fit-content; font-size:11px; text-transform:uppercase; letter-spacing:.05em; background:#2c3a57; color:#9cc2ff; border-radius:4px; padding:1px 6px; margin-bottom:3px; }
+  .dia { white-space:pre-line; padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin:5px 0; background:#10141b; }
+  .thumb.bad::after { content:'⚠ format non lisible ici'; position:absolute; inset:auto 0 0 0; background:#7a2f34; font-size:11px; text-align:center; padding:2px; }
+  .thumb .badge { position:absolute; top:3px; left:3px; background:rgba(0,0,0,.7); border-radius:4px; font-size:11px; padding:1px 6px; }
+  .thumb .addb { position:absolute; bottom:3px; left:3px; background:rgba(0,0,0,.7); border:0; padding:2px 7px; }
   .tt { color:var(--dim); font-size:12px; margin:10px 0 4px; text-transform:uppercase; letter-spacing:.05em; }
 </style>
 </head>
@@ -78,10 +97,13 @@
 <header>
   <h1>⛪ Régie — Projection du culte</h1>
   <span><span class="dot" id="dot"></span><span id="conn">Connexion…</span></span>
+  <span class="chw" title="Chronomètre du prédicateur (affiché sur son moniteur)">⏱ <b id="chtime">00:00</b><button class="sm" id="chgo">▶</button><button class="sm" id="chrst" title="Remettre à zéro">⟲</button><label class="hint"><input type="checkbox" id="chvis"> moniteur</label></span>
+  <button id="lthide" class="sm danger" style="display:none">Masquer le bandeau</button>
   <button id="prev">◀ Précédent</button>
   <button id="next" class="primary">Suivant ▶</button>
   <button id="hideall" class="danger">Tout masquer (Échap)</button>
 </header>
+<div class="upd" id="updbar">⬆ Mise à jour disponible : version <b id="updv"></b> <button class="primary sm" id="updgo">Installer</button><button class="sm" id="updlater">Plus tard</button></div>
 
 <main>
   <section class="card left">
@@ -89,6 +111,7 @@
       <button data-t="verse" class="on">📖 Verset</button>
       <button data-t="songs">🎵 Chants</button>
       <button data-t="media">🖼 Images / annonces</button>
+      <button data-t="lower">🏷 Bandeaux</button>
       <button data-t="plan">📋 Déroulé</button>
       <button data-t="set">⚙ Réglages</button>
     </div>
@@ -98,18 +121,17 @@
       <div class="row"><input id="ref" placeholder="Un livre (Jean, Ps…) ou une référence (Jn 3:16)" autocomplete="off" autofocus></div>
       <div class="bar"><button class="go" id="vgo">▶ Projeter</button><button class="stop" id="vhide">■ Masquer</button></div>
       <div class="livechip" id="lc-verse"></div>
-      <div id="vpreview"></div>
 
-      <div class="lbl">Parcourir la Bible</div>
       <div class="crumb" id="crumb"></div>
       <div class="row"><button class="sm" id="rangebtn">Plage de versets : non</button><span class="hint">ou Maj + clic sur un 2ᵉ verset</span></div>
-      <div id="browse" class="list"></div>
-
-      <div class="lbl">Versions (plusieurs = côte à côte)</div>
+      <div class="lbl tight">Versions (plusieurs = côte à côte)</div>
       <div class="row" id="vers"></div>
-      <div class="lbl">Affichage</div>
+      <div class="lbl tight">Affichage</div>
       <div class="row" id="vlay"></div>
       <div class="row"><button id="vprev">◀ Verset préc.</button><button id="vnext">Verset suiv. ▶</button><button id="vplan">➕ Déroulé</button></div>
+
+      <div id="vpreview"></div>
+      <div id="browse" class="list"></div>
 
       <div class="lbl">Recherche par mots</div>
       <div class="row"><input id="q" placeholder="ex : bon berger"><select id="qt" style="width:auto"><option value="all">Toute la Bible</option><option value="ot">Ancien Testament</option><option value="nt">Nouveau Testament</option><option value="book">Livre ouvert</option></select><button id="qgo">Chercher</button></div>
@@ -130,8 +152,11 @@
       </div>
       <div id="songedit" style="display:none">
         <div class="row"><input id="etitle" placeholder="Titre du chant"></div>
-        <div class="hint">Sépare les strophes / refrains par une ligne vide. Chaque bloc = une diapo de paroles.</div>
-        <textarea id="etext" placeholder="Strophe 1…&#10;&#10;Refrain…"></textarea>
+        <div class="row"><label class="hint">Lignes par diapo : <select id="eper" style="width:auto;display:inline-block"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label>
+          <label class="hint"><input type="checkbox" id="eauto" checked style="width:auto"> Découpage automatique</label></div>
+        <div class="hint">Colle tes paroles telles quelles : elles sont découpées toutes seules. Une ligne vide force un changement de diapo. Une ligne « Refrain », « Couplet 1 »… devient une étiquette.</div>
+        <textarea id="etext" placeholder="Couplet 1&#10;Ligne 1&#10;Ligne 2&#10;Ligne 3&#10;Ligne 4&#10;&#10;Refrain&#10;…"></textarea>
+        <div class="lbl" id="eprev-t"></div><div id="eprev"></div>
         <div class="row"><button class="primary" id="esave">Enregistrer</button><button id="ecancel">Annuler</button><button class="danger" id="edel">Supprimer</button></div>
       </div>
     </div>
@@ -140,23 +165,39 @@
     <div class="tab" id="t-media">
       <div class="bar"><button class="go" id="mgo">▶ Afficher</button><button class="stop" id="mhide">■ Masquer</button></div>
       <div class="livechip" id="lc-media"></div>
-      <div class="row"><button class="primary" id="mup">⬆ Ajouter images / vidéos</button><input type="file" id="mupf" accept="image/*,video/mp4,video/webm" multiple hidden></div>
-      <div class="hint">Astuce : dans PowerPoint, <i>Fichier → Exporter → PNG</i> puis ajoute les images ici. Un clic sur une image l'affiche.</div>
+      <div class="row"><button class="primary" id="mup">⬆ Ajouter images / vidéos</button><button id="mcard">📣 Annonce sans visuel</button><input type="file" id="mupf" accept="image/*,video/mp4,video/webm,video/quicktime,.mov,.m4v" multiple hidden></div>
+      <div class="hint">Astuce : dans PowerPoint, <i>Fichier → Exporter → PNG</i> puis ajoute les images ici. Un clic sur une image ou une vidéo l'affiche. Vidéos : MP4 (H.264) ou WebM.</div>
+      <div class="row" id="vidctl" style="display:none"><b class="hint">Vidéo :</b><button class="sm" id="vplay">⏸ Pause</button><button class="sm" id="vrestart">⏮ Début</button><button class="sm" id="vloop">🔁 Boucle : non</button><button class="sm" id="vmute">🔊 Son : oui</button></div>
       <div class="lbl">Disposition (le prédicateur reste visible dans la zone libre)</div>
       <div class="row" id="mlay"></div>
       <div class="grid" id="mgrid"></div>
 
       <div class="lbl" style="margin-top:18px">🎞 Fond pour écrans auxiliaires (vidéo en boucle ou image)</div>
-      <div class="hint">Uniquement sur la sortie « écran auxiliaire » (Réglages). Les paroles et versets passent par-dessus.</div>
+      <div class="hint">Uniquement sur la sortie « écran auxiliaire » (Réglages). Bouton « Fond » sur une image ou une vidéo ci-dessus. Les paroles et versets passent par-dessus.</div>
       <div class="row"><button id="bgnone" class="sm">Aucun fond</button>
         <label class="hint" style="flex:1">Assombrir : <input type="range" id="bgdim" min="0" max="90" step="5" style="width:60%;vertical-align:middle"></label></div>
-      <div class="grid" id="vgrid"></div>
+    </div>
+
+    <!-- ================= BANDEAUX ================= -->
+    <div class="tab" id="t-lower">
+      <div class="bar"><button class="go" id="lwgo">▶ Afficher</button><button class="stop" id="lwhide">■ Masquer</button></div>
+      <div class="livechip" id="lc-lower"></div>
+      <div class="row"><input id="lwt" placeholder="Titre (ex : Pasteur Jean Dupont)" autocomplete="off"></div>
+      <div class="row"><input id="lws" placeholder="Sous-titre (facultatif) — ex : Enseignement" autocomplete="off"></div>
+      <div class="row"><button class="sm" id="lwsave">💾 Garder dans ma liste</button><button class="sm" id="lwplan">➕ Déroulé</button></div>
+      <div class="hint">Le bandeau passe par-dessus tout le reste, à tout moment, et n'apparaît jamais sur le moniteur du prédicateur.</div>
+      <div class="lbl">Ma liste (un clic remplit les champs, ▶ affiche tout de suite)</div>
+      <div id="lwlist"></div>
+      <div class="lbl">Nom d'une section du culte (un clic l'affiche)</div>
+      <div class="row" id="lwsecs"></div>
     </div>
 
     <!-- ================= DÉROULÉ ================= -->
     <div class="tab" id="t-plan">
-      <div class="row"><input id="note" placeholder="Ajouter une note (ex : Offrande, Annonces…)"><button id="noteadd">➕ Note</button><button id="planclear" class="danger">Vider</button></div>
-      <div class="hint">Ajoute des éléments depuis les autres onglets (➕ Déroulé). <kbd>→</kbd> / <kbd>Espace</kbd> = suivant, <kbd>←</kbd> = précédent, <kbd>Échap</kbd> = tout masquer.</div>
+      <div class="row"><input id="planname" placeholder="Nom du culte (ex : Culte du 24 novembre)"></div>
+      <div class="row"><button class="sm" id="plannew">🆕 Nouveau culte</button><button class="sm" id="plansave">💾 Enregistrer</button><button class="sm" id="planopen">📂 Ouvrir…</button><button class="sm" id="plantpl">⭐ Définir comme modèle</button></div>
+      <div class="hint">Le « Nouveau culte » repart du modèle (sections + éléments fixes comme les visuels d'accueil). <kbd>→</kbd> / <kbd>Espace</kbd> = suivant, <kbd>←</kbd> = précédent, <kbd>Échap</kbd> = tout masquer. Clique une section pour en faire la destination des « ➕ Déroulé » des autres onglets.</div>
+      <div class="row"><label class="hint"><input type="checkbox" id="planedit" style="width:auto"> Modifier les sections</label><button class="sm danger" id="planclear" style="display:none">Vider tous les éléments</button><button class="sm" id="secadd" style="display:none">➕ Section</button></div>
       <div id="planlist"></div>
     </div>
 
@@ -182,12 +223,28 @@
       <details><summary>Apparence des paroles</summary><div class="grp" id="th-lyrics"></div></details>
       <details><summary>Moniteur du prédicateur (verset plein écran)</summary><div class="grp" id="th-monitor"></div></details>
       <details><summary>Images / annonces : zone image et fond</summary><div class="grp" id="th-media"></div></details>
+      <details><summary>Bandeaux (lower thirds)</summary><div class="grp" id="th-lower"></div></details>
 
       <details><summary>Images de fond (versets, annonces, moniteur)</summary>
         <div class="hint">Choisis une image parmi celles de l'onglet Images, ou importe-en une nouvelle.</div>
         <div class="grp" id="bgs"></div>
       </details>
       <div class="row"><button id="threset" class="sm">Réinitialiser l'apparence</button></div>
+
+      <details open><summary>Mise à jour de l'appli</summary>
+        <div class="row"><span id="updinfo" class="hint"></span></div>
+        <div class="row"><button id="updcheck" class="sm">Vérifier maintenant</button><button id="updinst" class="primary sm" style="display:none">Installer</button><button id="updrb" class="sm" style="display:none">Revenir à la version précédente</button></div>
+        <div class="hint">Tes chants, Bibles, images et réglages (dossier <code>data</code>) ne sont jamais touchés. La version précédente est gardée pour pouvoir revenir en arrière.</div>
+      </details>
+
+      <details><summary>Sauvegarde des Bibles</summary>
+        <div class="row"><a class="btnlink" href="/api/backup/bibles" download>⬇ Télécharger la sauvegarde (zip)</a><button id="bkrest" class="sm">⬆ Restaurer depuis un zip</button><input type="file" id="bkf" accept=".zip" hidden></div>
+        <div class="lbl tight">Copie automatique dans un dossier (facultatif)</div>
+        <div class="row"><input id="bkdir" placeholder="ex : C:\Users\moi\Google Drive\Culte   ou   /Users/moi/Dropbox/Culte"><button id="bkset" class="sm">Enregistrer</button></div>
+        <div id="bkinfo" class="hint"></div>
+        <div class="row"><button id="bkfolder" class="sm">Récupérer les Bibles manquantes depuis ce dossier</button></div>
+        <div class="hint">Mets le dossier dans Google Drive, Dropbox ou OneDrive pour avoir une copie hors de cet ordinateur. Chaque Bible importée y est copiée automatiquement.</div>
+      </details>
 
       <details><summary>Importer une Bible</summary>
         <div class="grp">
@@ -206,12 +263,12 @@
   <section class="right">
     <div class="card">
       <div class="row" style="margin-top:0"><select id="pvsel">
-        <option value="/output.html?layer=all&bg=checker">Aperçu : sortie OBS / vMix (transparent)</option>
-        <option value="/output.html?screen=1">Aperçu : écran auxiliaire (avec fond)</option>
-        <option value="/output.html?monitor=1">Aperçu : moniteur du prédicateur</option>
+        <option value="/output.html?layer=all&bg=checker&preview=1">Aperçu : sortie OBS / vMix (transparent)</option>
+        <option value="/output.html?screen=1&preview=1">Aperçu : écran auxiliaire (avec fond)</option>
+        <option value="/output.html?monitor=1&preview=1">Aperçu : moniteur du prédicateur</option>
       </select></div>
-      <iframe class="preview" id="pv" src="/output.html?layer=all&bg=checker"></iframe>
-      <div class="chips"><span class="chip" id="c-verse">Verset</span><span class="chip" id="c-lyrics">Paroles</span><span class="chip" id="c-media">Image</span></div>
+      <iframe class="preview" id="pv" src="/output.html?layer=all&bg=checker&preview=1"></iframe>
+      <div class="chips"><span class="chip" id="c-verse">Verset</span><span class="chip" id="c-lyrics">Paroles</span><span class="chip" id="c-media">Image</span><span class="chip" id="c-lower">Bandeau</span></div>
       <div class="hint">Aperçu de la sortie (damier = transparent).</div>
     </div>
   </section>
@@ -222,7 +279,7 @@
 const $ = s => document.querySelector(s);
 const el = h => { const d = document.createElement('div'); d.innerHTML = h.trim(); return d.firstChild; };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-let S = null, bibles = [], songs = [], media = [], curSong = null, curSection = 0, selMedia = null, ws;
+let S = null, bibles = [], songs = [], media = [], curSong = null, curSection = 0, selMedia = null, ws, chronoOffset = 0;
 let sel = null, anchor = null, rangeMode = false, browse = { mode: 'books' }, lastLiveP = '', renderSeq = 0;
 
 const VL = [['lower', 'Bandeau bas'], ['side', 'Panneau côté'], ['center', 'Centré'], ['full', 'Plein écran']];
@@ -236,7 +293,7 @@ function connect() {
   ws.onclose = () => { $('#dot').classList.remove('ok'); $('#conn').textContent = 'Reconnexion…'; setTimeout(connect, 1000); };
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
-    if (m.type === 'state') { S = m.state; renderState(); }
+    if (m.type === 'state') { S = m.state; chronoOffset = S.chrono.now - Date.now(); renderState(); }
     if (m.type === 'toast') toast(m.msg);
   };
 }
@@ -246,6 +303,25 @@ async function api(path, opt = {}) {
   if (!r.ok) throw new Error(j.error || 'Erreur'); return j;
 }
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 4000); }
+
+// ---------- fenêtre modale + petits utilitaires ----------
+function modal(title, html, buttons) {
+  const o = el('<div class="ovl"><div class="mdl"><h3>' + title + '</h3><div class="mb">' + html + '</div><div class="mf"></div></div></div>');
+  const close = () => o.remove();
+  buttons.forEach(b => {
+    const x = el('<button class="' + (b.cls || '') + '">' + b.label + '</button>');
+    x.onclick = async () => { try { if ((await b.fn(o)) !== false) close(); } catch (e) { toast(e.message); } };
+    o.querySelector('.mf').appendChild(x);
+  });
+  o.onclick = e => { if (e.target === o) close(); };
+  document.body.appendChild(o);
+  return o;
+}
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+const fmtDate = iso => { const d = new Date(iso + 'T12:00:00'); return isNaN(d) ? iso : cap(d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })); };
+const fmtTime = t => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? (+m[1]) + 'h' + m[2] : t; };
+const targetSec = () => { const P = S && S.plan; const x = P && P.sections.find(z => z.id === P.target); return x ? x.title : ''; };
+function addToPlan(item) { send('plan.add', { item }); toast('Ajouté au déroulé' + (targetSec() ? ' : « ' + targetSec() + ' »' : '')); }
 
 // ---------- onglets + masquage automatique ----------
 const HIDE = { verse: ['verse', 'verse.hide'], songs: ['lyrics', 'lyrics.hide'], media: ['media', 'media.hide'] };
@@ -332,7 +408,7 @@ $('#vprev').onclick = () => send('verse.nav', { dir: -1 });
 $('#vnext').onclick = () => send('verse.nav', { dir: 1 });
 $('#vplan').onclick = () => {
   if (!sel) return toast('Choisis d\'abord un verset');
-  send('plan.add', { item: { type: 'verse', p: sel, ref: $('#ref').value, versions: selVersions(), layout: S.live.verse.layout, label: $('#ref').value || 'Verset' } }); toast('Ajouté au déroulé');
+  addToPlan({ type: 'verse', p: sel, ref: $('#ref').value, versions: selVersions(), layout: S.live.verse.layout, label: $('#ref').value || 'Verset' });
 };
 $('#rangebtn').onclick = () => { rangeMode = !rangeMode; $('#rangebtn').textContent = 'Plage de versets : ' + (rangeMode ? 'oui' : 'non'); $('#rangebtn').classList.toggle('on', rangeMode); };
 
@@ -429,6 +505,7 @@ async function doSearch(more) {
   if (j.total > qOffset) { const m = el('<button class="more">Voir plus…</button>'); m.onclick = () => doSearch(true); box.appendChild(m); }
 }
 $('#qgo').onclick = () => doSearch(false); $('#q').onkeydown = e => { if (e.key === 'Enter') doSearch(false); };
+$('#q').oninput = () => { if (!$('#q').value.trim()) { $('#qres').innerHTML = ''; $('#qinfo').textContent = ''; qOffset = 0; } };
 
 // =====================================================================
 //                               CHANTS
@@ -451,25 +528,58 @@ function renderSong() {
   box.innerHTML = '<div class="row"><b style="flex:1">' + esc(s.title) + '</b><button class="sm" id="sadd">➕ Déroulé</button></div>';
   s.sections.forEach((t, i) => {
     const live = S && S.live.lyrics.on && S.live.lyrics.songId === s.id && S.live.lyrics.section === i;
-    const d = el('<div class="sec' + (live ? ' cur' : '') + '">' + esc(t) + '</div>');
+    const lb = (s.labels || [])[i];
+    const d = el('<div class="sec' + (live ? ' cur' : '') + '">' + (lb ? '<div class="lab">' + esc(lb) + '</div>' : '') + esc(t) + '</div>');
     d.onclick = () => { curSection = i; send('lyrics.show', { songId: s.id, section: i }); };
     box.appendChild(d);
   });
-  $('#sadd').onclick = () => { send('plan.add', { item: { type: 'song', songId: s.id, label: s.title } }); toast('Ajouté au déroulé'); };
+  $('#sadd').onclick = () => addToPlan({ type: 'song', songId: s.id, label: s.title });
 }
 $('#sfilter').oninput = renderSongs;
 $('#lgo').onclick = () => { if (!curSong) return toast('Choisis un chant'); send('lyrics.show', { songId: curSong, section: curSection }); };
 $('#lhide').onclick = () => send('lyrics.hide');
 let editId = null;
+// --- découpage automatique des paroles
+const LABEL_RE = /^\s*[\[(]?\s*((?:pré[- ]?)?(?:couplet|strophe|refrain|pont|bridge|chorus|verse|intro|outro|interlude)(?:\s+(?:\d{1,2}|x\s?\d|bis|[ivx]{1,4}|[a-c]))*)\s*[\])]?\s*:?\s*$/i;
+function chunkLines(lines, per) {
+  const w = l => l.length > 55 ? 2 : 1;
+  const res = []; let cur = [], cw = 0;
+  for (const l of lines) { const x = w(l); if (cur.length && cw + x > per) { res.push(cur); cur = []; cw = 0; } cur.push(l); cw += x; }
+  if (cur.length) res.push(cur);
+  if (per >= 2 && res.length > 1) { const last = res[res.length - 1], prev = res[res.length - 2]; if (last.length === 1 && w(last[0]) === 1 && prev.length <= per) { prev.push(last[0]); res.pop(); } }
+  return res;
+}
+function parseSong(text, per, auto) {
+  const out = [];
+  for (const block of text.replace(/\r/g, '').split(/\n\s*\n/)) {
+    const lines = block.split('\n').map(l => l.replace(/\s+$/, '')).filter(l => l.trim());
+    let label = '', cur = [];
+    const flush = () => { if (cur.length) (auto ? chunkLines(cur, per) : [cur]).forEach(c => out.push({ label, text: c.join('\n') })); cur = []; };
+    for (const l of lines) { const m = l.trim().length <= 32 && LABEL_RE.exec(l); if (m) { flush(); label = m[1].trim(); } else cur.push(l); }
+    flush();
+  }
+  return out;
+}
+function songPreview() {
+  const list = parseSong($('#etext').value, +$('#eper').value, $('#eauto').checked);
+  $('#eprev-t').textContent = list.length ? 'Aperçu : ' + list.length + ' diapo' + (list.length > 1 ? 's' : '') : '';
+  $('#eprev').innerHTML = list.map(x => '<div class="dia">' + (x.label ? '<div class="lab">' + esc(x.label) + '</div>' : '') + esc(x.text) + '</div>').join('');
+  return list;
+}
+['#etext', '#eper', '#eauto'].forEach(id => { $(id).oninput = songPreview; $(id).onchange = songPreview; });
 function editSong(s) {
-  editId = s ? s.id : null; $('#etitle').value = s ? s.title : ''; $('#etext').value = s ? s.sections.join('\n\n') : '';
+  editId = s ? s.id : null; $('#etitle').value = s ? s.title : '';
+  $('#etext').value = s ? s.sections.map((t, i) => ((s.labels || [])[i] ? '[' + s.labels[i] + ']\n' : '') + t).join('\n\n') : '';
+  $('#eauto').checked = !s; $('#eper').value = '2';
   $('#edel').style.display = s ? '' : 'none'; $('#songview').style.display = 'none'; $('#songedit').style.display = '';
+  songPreview();
 }
 $('#snew').onclick = () => editSong(null);
 $('#ecancel').onclick = () => { $('#songview').style.display = ''; $('#songedit').style.display = 'none'; };
 $('#esave').onclick = async () => {
   try {
-    const r = await api('/api/songs', { method: 'POST', body: JSON.stringify({ id: editId, title: $('#etitle').value, sections: $('#etext').value.split(/\n\s*\n/) }) });
+    const list = songPreview();
+    const r = await api('/api/songs', { method: 'POST', body: JSON.stringify({ id: editId, title: $('#etitle').value, sections: list.map(x => x.text), labels: list.map(x => x.label) }) });
     curSong = r.id; await loadSongs(); renderSong(); $('#ecancel').click();
   } catch (e) { toast(e.message); }
 };
@@ -479,8 +589,8 @@ $('#spptxf').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   try {
     const j = await api('/api/songs/import-pptx', { method: 'POST', body: f });
-    editSong(null); $('#etitle').value = f.name.replace(/\.pptx$/i, ''); $('#etext').value = j.sections.join('\n\n');
-    toast('Texte importé : relis, corrige et enregistre');
+    editSong(null); $('#etitle').value = f.name.replace(/\.pptx$/i, ''); $('#etext').value = j.sections.join('\n\n'); songPreview();
+    toast('Texte importé et découpé : vérifie l\'aperçu puis enregistre');
   } catch (err) { toast(err.message); }
   e.target.value = '';
 };
@@ -490,63 +600,221 @@ $('#spptxf').onchange = async e => {
 // =====================================================================
 async function loadMedia() { media = await api('/api/media'); buildMedia(); }
 function buildMedia() {
-  const g = $('#mgrid'), vg = $('#vgrid'); g.innerHTML = ''; vg.innerHTML = '';
-  media.filter(m => m.type === 'video').forEach(m => {
-    const d = el('<div class="thumb" data-u="' + m.url + '" title="' + esc(m.name) + '"><video muted preload="metadata" src="' + m.url + '#t=0.5"></video><button class="x sm">✕</button></div>');
-    d.onclick = () => send('bg.set', { src: m.url, type: 'video' });
-    d.querySelector('.x').onclick = async e => { e.stopPropagation(); if (confirm('Supprimer « ' + m.name + ' » ?')) { await api('/api/media?name=' + encodeURIComponent(m.name), { method: 'DELETE' }); loadMedia(); } };
-    vg.appendChild(d);
-  });
-  if (!media.some(m => m.type === 'video')) vg.innerHTML = '<div class="hint">Aucune vidéo (.mp4 / .webm, courte, en boucle, idéalement < 100 Mo).</div>';
-  media.filter(m => m.type !== 'video').forEach(m => {
-    const d = el('<div class="thumb" data-u="' + m.url + '" title="' + esc(m.name) + '"><img loading="lazy" src="' + m.url + '"><button class="x sm">✕</button><button class="x sm bgb" style="top:auto;bottom:3px;right:3px" title="Utiliser comme fond d\'écran auxiliaire">Fond</button></div>');
+  const g = $('#mgrid'); g.innerHTML = '';
+  media.forEach(m => {
+    const isV = m.type === 'video';
+    const d = el('<div class="thumb" data-u="' + m.url + '" title="' + esc(m.name) + '">' + (isV ? '<video muted preload="metadata" src="' + m.url + '#t=0.5"></video><span class="badge">▶ vidéo</span>' : '<img loading="lazy" src="' + m.url + '">') +
+      '<button class="x sm">✕</button><button class="addb sm" title="Ajouter au déroulé">➕</button><button class="x sm bgb" style="top:auto;bottom:3px;right:3px" title="Utiliser comme fond d\'écran auxiliaire">Fond</button></div>');
+    if (isV) { const v = d.querySelector('video'); v.onerror = () => d.classList.add('bad'); }
     d.onclick = () => { selMedia = m; send('media.show', { src: m.url, name: m.name }); };
-    d.querySelector('.bgb').onclick = e => { e.stopPropagation(); send('bg.set', { src: m.url, type: 'image' }); toast('Image définie comme fond (écran auxiliaire)'); };
+    d.querySelector('.bgb').onclick = e => { e.stopPropagation(); send('bg.set', { src: m.url, type: m.type }); toast('Défini comme fond (écran auxiliaire)'); };
+    d.querySelector('.addb').onclick = e => { e.stopPropagation(); addToPlan({ type: 'media', src: m.url, layout: S.live.media.layout, label: m.name }); };
     d.querySelector('.x').onclick = async e => { e.stopPropagation(); if (confirm('Supprimer « ' + m.name + ' » ?')) { await api('/api/media?name=' + encodeURIComponent(m.name), { method: 'DELETE' }); loadMedia(); } };
-    d.oncontextmenu = e => { e.preventDefault(); send('plan.add', { item: { type: 'media', src: m.url, layout: S.live.media.layout, label: m.name } }); toast('Ajouté au déroulé'); };
     g.appendChild(d);
   });
-  if (!media.some(m => m.type !== 'video')) g.innerHTML = '<div class="hint">Aucune image. Clic droit sur une image = l’ajouter au déroulé.</div>';
+  if (!media.length) g.innerHTML = '<div class="hint">Aucune image ni vidéo. Clique « Ajouter ».</div>';
   buildBgSelects(); markMedia();
 }
 function markMedia() {
   if (!S) return;
   document.querySelectorAll('#mgrid .thumb').forEach(t => t.classList.toggle('cur', S.live.media.on && S.live.media.src === t.dataset.u));
-  document.querySelectorAll('#vgrid .thumb').forEach(t => t.classList.toggle('cur', S.background.src === t.dataset.u));
 }
 async function uploadMedia(file) { return api('/api/media?name=' + encodeURIComponent(file.name), { method: 'POST', body: file }); }
 $('#mup').onclick = () => $('#mupf').click();
 $('#mupf').onchange = async e => {
-  for (const f of e.target.files) { try { await uploadMedia(f); } catch (err) { toast(err.message); } }
-  e.target.value = ''; loadMedia();
+  const files = [...e.target.files]; e.target.value = '';
+  for (const f of files) { toast('Envoi de « ' + f.name + ' »…'); try { await uploadMedia(f); } catch (err) { toast(err.message); } }
+  await loadMedia(); toast('Envoi terminé');
 };
-$('#mgo').onclick = () => { if (!selMedia) return toast('Touche une image pour la choisir'); send('media.show', { src: selMedia.url, name: selMedia.name }); };
+$('#mgo').onclick = () => { if (!selMedia) return toast('Touche une image ou une vidéo pour la choisir'); send('media.show', { src: selMedia.url, name: selMedia.name }); };
 $('#mhide').onclick = () => send('media.hide');
 $('#bgnone').onclick = () => send('bg.clear');
 $('#bgdim').oninput = e => send('bg.dim', { value: e.target.value / 100 });
+$('#vplay').onclick = () => send('media.video', { playing: !S.live.media.video.playing });
+$('#vrestart').onclick = () => send('media.video', { restart: true });
+$('#vloop').onclick = () => send('media.video', { loop: !S.live.media.video.loop });
+$('#vmute').onclick = () => send('media.video', { muted: !S.live.media.video.muted });
+
+// --- fiche d'annonce (utilisée ici et dans le déroulé)
+const mediaOpts = () => media.map(m => '<option value="' + m.url + '">' + esc(m.name) + (m.type === 'video' ? ' (vidéo)' : '') + '</option>').join('');
+const layoutOpts = cur => ML.map(([v, l]) => '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + l + '</option>').join('');
+function announceForm(it) {
+  it = it || {}; const c = it.card || {};
+  return '<div class="row"><label><input type="radio" name="am" value="visual" style="width:auto"> Avec un visuel (affiché seul)</label><label><input type="radio" name="am" value="card" style="width:auto"> Sans visuel (fiche texte)</label></div>' +
+    '<div id="a-visual"><select id="a-src"><option value="">— Choisir le visuel —</option>' + mediaOpts() + '</select><input id="a-vlabel" placeholder="Nom de l\'annonce (facultatif)" style="margin-top:8px"></div>' +
+    '<div id="a-card"><input id="a-title" placeholder="Titre *"><div class="row"><input type="date" id="a-date"><input type="time" id="a-time"></div><input id="a-place" placeholder="Lieu *"><input id="a-speaker" placeholder="Orateur (facultatif)" style="margin-top:8px"><textarea id="a-extra" style="min-height:70px;margin-top:8px" placeholder="Infos supplémentaires (facultatif)"></textarea></div>' +
+    '<div class="row"><span class="hint">Disposition</span><select id="a-layout" style="width:auto">' + layoutOpts(it.layout || S.live.media.layout) + '</select></div>';
+}
+function wireAnnounce(o, it) {
+  it = it || {}; const c = it.card || {};
+  const set = () => { const card = o.querySelector('[name=am]:checked').value === 'card'; o.querySelector('#a-card').style.display = card ? '' : 'none'; o.querySelector('#a-visual').style.display = card ? 'none' : ''; };
+  o.querySelectorAll('[name=am]').forEach(r => { r.onchange = set; });
+  o.querySelector('[name=am][value=' + (it.mode === 'card' || (!it.mode && !media.length) ? 'card' : 'visual') + ']').checked = true;
+  if (it.src) o.querySelector('#a-src').value = it.src;
+  o.querySelector('#a-vlabel').value = it.mode === 'visual' ? (it.label || '') : '';
+  o.querySelector('#a-title').value = c.title || ''; o.querySelector('#a-date').value = c.dateISO || ''; o.querySelector('#a-time').value = c.timeRaw || '';
+  o.querySelector('#a-place').value = c.place || ''; o.querySelector('#a-speaker').value = c.speaker || ''; o.querySelector('#a-extra').value = c.extra || '';
+  set();
+}
+function readAnnounce(o) {
+  const v = id => o.querySelector(id).value.trim(), layout = v('#a-layout');
+  if (o.querySelector('[name=am]:checked').value === 'visual') {
+    if (!v('#a-src')) throw new Error('Choisis un visuel');
+    return { type: 'announce', mode: 'visual', src: v('#a-src'), layout, label: v('#a-vlabel') };
+  }
+  if (!v('#a-title') || !v('#a-date') || !v('#a-time') || !v('#a-place')) throw new Error('Titre, date, heure et lieu sont obligatoires pour une annonce sans visuel');
+  const card = { title: v('#a-title'), dateISO: v('#a-date'), date: fmtDate(v('#a-date')), timeRaw: v('#a-time'), time: fmtTime(v('#a-time')), place: v('#a-place'), speaker: v('#a-speaker'), extra: v('#a-extra') };
+  return { type: 'announce', mode: 'card', card, layout, label: card.title };
+}
+function showAnnounce(it) { it.mode === 'card' ? send('media.show', { kind: 'card', card: it.card, layout: it.layout, name: it.label }) : send('media.show', { src: it.src, layout: it.layout, name: it.label }); }
+$('#mcard').onclick = () => {
+  const o = modal('📣 Annonce', announceForm(), [
+    { label: 'Annuler', fn: () => true },
+    { label: '➕ Déroulé', fn: o => { addToPlan(readAnnounce(o)); } },
+    { label: '▶ Afficher', cls: 'primary', fn: o => { showAnnounce(readAnnounce(o)); } },
+  ]);
+  wireAnnounce(o);
+};
+
+// =====================================================================
+//                               BANDEAUX
+// =====================================================================
+const lwShow = (title, sub) => send('lower.show', { title, sub });
+$('#lwgo').onclick = () => lwShow($('#lwt').value, $('#lws').value);
+$('#lwhide').onclick = () => send('lower.hide');
+$('#lthide').onclick = () => send('lower.hide');
+$('#lwt').onkeydown = $('#lws').onkeydown = e => { if (e.key === 'Enter') lwShow($('#lwt').value, $('#lws').value); };
+$('#lwsave').onclick = () => { if (!$('#lwt').value.trim()) return toast('Écris au moins un titre'); send('lowers.add', { title: $('#lwt').value, sub: $('#lws').value }); toast('Gardé dans ta liste'); };
+$('#lwplan').onclick = () => { const t = $('#lwt').value.trim(); if (!t) return toast('Écris au moins un titre'); addToPlan({ type: 'lower', title: t, sub: $('#lws').value.trim(), label: t }); };
+let lwKey = '';
+function renderLowers() {
+  const key = JSON.stringify([S.lowers, S.plan.sections.map(x => x.title)]);
+  if (key === lwKey) return; lwKey = key;
+  const box = $('#lwlist'); box.innerHTML = '';
+  S.lowers.forEach(x => {
+    const d = el('<div class="item"><div class="t"><b>' + esc(x.title) + '</b>' + (x.sub ? '<div class="hint">' + esc(x.sub) + '</div>' : '') + '</div><button class="sm" data-a="go">▶</button><button class="sm" data-a="rm">✕</button></div>');
+    d.onclick = e => {
+      const a = e.target.dataset.a;
+      if (a === 'go') lwShow(x.title, x.sub); else if (a === 'rm') send('lowers.remove', { id: x.id });
+      else { $('#lwt').value = x.title; $('#lws').value = x.sub; }
+    };
+    box.appendChild(d);
+  });
+  if (!S.lowers.length) box.innerHTML = '<div class="hint">Ta liste est vide : remplis les champs puis « Garder dans ma liste ».</div>';
+  const sb = $('#lwsecs'); sb.innerHTML = '';
+  S.plan.sections.forEach(sec => { const b = el('<button class="sm">' + esc(sec.title) + '</button>'); b.onclick = () => lwShow(sec.title, ''); sb.appendChild(b); });
+}
 
 // =====================================================================
 //                               DÉROULÉ
 // =====================================================================
-const ICON = { song: '🎵', verse: '📖', media: '🖼', note: '📝' };
+const ICON = { song: '🎵', verse: '📖', media: '🖼', announce: '📣', lower: '🏷', note: '📝' };
+const EDITABLE = ['announce', 'lower', 'note'];
+let planEdit = false;
+const itemSub = it => it.type === 'announce' ? (it.mode === 'card' ? [it.card.date, it.card.time, it.card.place].join(' · ') : 'avec visuel') : it.type === 'lower' ? (it.sub || '') : '';
 function renderPlan() {
-  const box = $('#planlist'); box.innerHTML = '';
-  S.plan.items.forEach((it, i) => {
-    const d = el('<div class="item' + (S.plan.cursor === i ? ' cur' : '') + '"><span>' + (ICON[it.type] || '') + '</span><div class="t">' + esc(it.label || it.ref || '') + '</div>' +
-      '<button class="sm" data-a="up">▲</button><button class="sm" data-a="dn">▼</button><button class="sm" data-a="rm">✕</button></div>');
-    d.onclick = e => {
+  const P = S.plan, box = $('#planlist'); box.innerHTML = '';
+  if (document.activeElement !== $('#planname')) $('#planname').value = P.name;
+  $('#planclear').style.display = $('#secadd').style.display = planEdit ? '' : 'none';
+  P.sections.forEach(sec => {
+    const ed = planEdit ? '<button class="sm" data-act="secedit" data-sec="' + sec.id + '">✎</button><button class="sm" data-act="secup" data-sec="' + sec.id + '">▲</button><button class="sm" data-act="secdn" data-sec="' + sec.id + '">▼</button><button class="sm" data-act="secrm" data-sec="' + sec.id + '">✕</button>' : '';
+    let h = '<div class="psec' + (P.target === sec.id ? ' target' : '') + '"><div class="phead" data-act="target" data-sec="' + sec.id + '"><b>' + esc(sec.title) + '</b><span class="hint">' + sec.items.length + '</span>' +
+      '<button class="sm" data-act="lower" data-sec="' + sec.id + '" title="Afficher le nom de la section en bandeau">🏷</button><button class="sm" data-act="add" data-sec="' + sec.id + '">➕</button>' + ed + '</div>';
+    sec.items.forEach(it => {
+      const sub = itemSub(it);
+      h += '<div class="item' + (P.cursor === it.id ? ' cur' : '') + '" data-act="go" data-id="' + it.id + '"><span>' + (ICON[it.type] || '') + '</span><div class="t">' + esc(it.label || it.ref || '') + (sub ? '<div class="hint">' + esc(sub) + '</div>' : '') + '</div>' +
+        (EDITABLE.includes(it.type) ? '<button class="sm" data-act="edit" data-id="' + it.id + '">✎</button>' : '') +
+        '<button class="sm" data-act="up" data-id="' + it.id + '">▲</button><button class="sm" data-act="dn" data-id="' + it.id + '">▼</button><button class="sm" data-act="rm" data-id="' + it.id + '">✕</button></div>';
+    });
+    box.insertAdjacentHTML('beforeend', h + '</div>');
+  });
+}
+const findPlanItem = id => { for (const s of S.plan.sections) { const it = s.items.find(x => x.id === id); if (it) return { sec: s, it }; } return null; };
+$('#planlist').onclick = e => {
+  const t = e.target.closest('[data-act]'); if (!t) return;
+  const act = t.dataset.act, id = t.dataset.id, sec = t.dataset.sec, sc = sec && S.plan.sections.find(x => x.id === sec);
+  e.stopPropagation();
+  if (act === 'target') send('plan.target', { sec });
+  else if (act === 'lower') send('lower.show', { title: sc.title, sub: '' });
+  else if (act === 'add') { send('plan.target', { sec }); itemModal(sec); }
+  else if (act === 'go') send('plan.go', { id });
+  else if (act === 'edit') { const f = findPlanItem(id); itemModal(f.sec.id, f.it); }
+  else if (act === 'up') send('plan.move', { id, dir: -1 });
+  else if (act === 'dn') send('plan.move', { id, dir: 1 });
+  else if (act === 'rm') send('plan.remove', { id });
+  else if (act === 'secedit') { const n = prompt('Nom de la section', sc.title); if (n) send('plan.section.rename', { sec, title: n }); }
+  else if (act === 'secup') send('plan.section.move', { sec, dir: -1 });
+  else if (act === 'secdn') send('plan.section.move', { sec, dir: 1 });
+  else if (act === 'secrm') { if (confirm('Supprimer la section « ' + sc.title + ' » et ses ' + sc.items.length + ' élément(s) ?')) send('plan.section.remove', { sec }); }
+};
+$('#planedit').onchange = e => { planEdit = e.target.checked; if (S) renderPlan(); };
+$('#secadd').onclick = () => { const n = prompt('Nom de la nouvelle section'); if (n) send('plan.section.add', { title: n }); };
+$('#planclear').onclick = () => { if (confirm('Retirer tous les éléments de toutes les sections ? (les sections restent)')) send('plan.clear'); };
+$('#planname').onchange = e => send('plan.name', { name: e.target.value });
+$('#plannew').onclick = () => { if (confirm('Repartir du modèle ? Le déroulé actuel sera remplacé (pense à l\'enregistrer avant).')) send('plan.load', { id: 'template' }); };
+$('#plansave').onclick = async () => {
+  const name = prompt('Nom du culte à enregistrer', S.plan.name); if (!name) return;
+  try { await api('/api/plans', { method: 'POST', body: JSON.stringify({ name }) }); toast('Culte enregistré'); } catch (e) { toast(e.message); }
+};
+$('#plantpl').onclick = async () => {
+  if (!confirm('Définir ce déroulé comme modèle ? Il servira de point de départ pour chaque « Nouveau culte » (sections + éléments fixes).')) return;
+  try { await api('/api/plans', { method: 'POST', body: JSON.stringify({ template: true }) }); toast('Modèle enregistré'); } catch (e) { toast(e.message); }
+};
+$('#planopen').onclick = async () => {
+  const list = await api('/api/plans');
+  const o = modal('📂 Ouvrir un culte enregistré', '<div id="pl-list"></div>', [{ label: 'Fermer', fn: () => true }]);
+  const box = o.querySelector('#pl-list');
+  if (!list.length) box.innerHTML = '<div class="hint">Aucun culte enregistré pour l\'instant.</div>';
+  list.forEach(x => {
+    const d = el('<div class="item"><div class="t">' + (x.template ? '⭐ ' : '') + esc(x.name) + '<div class="hint">' + x.items + ' élément(s)</div></div><button class="sm" data-a="open">Ouvrir</button><button class="sm" data-a="rm">✕</button></div>');
+    d.onclick = async e => {
       const a = e.target.dataset.a;
-      if (a === 'up') send('plan.move', { id: it.id, dir: -1 });
-      else if (a === 'dn') send('plan.move', { id: it.id, dir: 1 });
-      else if (a === 'rm') send('plan.remove', { id: it.id });
-      else send('plan.go', { index: i });
+      if (a === 'open') { send('plan.load', { id: x.id }); o.remove(); }
+      else if (a === 'rm' && confirm('Supprimer « ' + x.name + ' » ?')) { await api('/api/plans?id=' + x.id, { method: 'DELETE' }); d.remove(); }
     };
     box.appendChild(d);
   });
-  if (!S.plan.items.length) box.innerHTML = '<div class="hint" style="margin-top:12px">Déroulé vide.</div>';
+};
+
+// --- ajout / modification d'un élément du déroulé
+const TYPES = [['song', '🎵 Chant'], ['verse', '📖 Verset'], ['media', '🖼 Image / vidéo'], ['announce', '📣 Annonce'], ['lower', '🏷 Bandeau'], ['note', '📝 Note']];
+function itemBody(type, it) {
+  it = it || {};
+  if (type === 'song') return '<select id="i-song">' + songs.map(x => '<option value="' + x.id + '">' + esc(x.title) + '</option>').join('') + '</select>';
+  if (type === 'verse') return '<input id="i-ref" placeholder="Référence, ex : Jean 3:16-17" value="' + esc(it.ref || '') + '"><div class="hint">Versions utilisées : celles cochées dans l\'onglet Verset.</div>';
+  if (type === 'media') return '<select id="i-media">' + mediaOpts() + '</select><div class="row"><span class="hint">Disposition</span><select id="i-lay" style="width:auto">' + layoutOpts(S.live.media.layout) + '</select></div>';
+  if (type === 'announce') return announceForm(it);
+  if (type === 'lower') return '<input id="i-lt" placeholder="Titre *" value="' + esc(it.title || '') + '"><input id="i-ls" placeholder="Sous-titre (facultatif)" value="' + esc(it.sub || '') + '" style="margin-top:8px">';
+  return '<input id="i-note" placeholder="Note (ex : Appel à l\'offrande)" value="' + esc(it.label || '') + '">';
 }
-$('#noteadd').onclick = () => { const v = $('#note').value.trim(); if (v) { send('plan.add', { item: { type: 'note', label: v } }); $('#note').value = ''; } };
-$('#planclear').onclick = () => { if (confirm('Vider le déroulé ?')) send('plan.clear'); };
+async function readItem(o, type) {
+  const v = id => o.querySelector(id).value.trim();
+  if (type === 'song') { const s = songs.find(x => x.id === v('#i-song')); if (!s) throw new Error('Aucun chant disponible'); return { type, songId: s.id, label: s.title }; }
+  if (type === 'verse') {
+    const ref = v('#i-ref'), vs = S.prefs.versions.join(',');
+    const j = await api('/api/verse?ref=' + encodeURIComponent(ref) + '&v=' + vs);
+    if (!j.ok) throw new Error('Référence introuvable : « ' + ref + ' »');
+    return { type, p: j.p, ref: j.ref, versions: S.prefs.versions, layout: S.live.verse.layout, label: j.ref };
+  }
+  if (type === 'media') { const m = media.find(x => x.url === v('#i-media')); if (!m) throw new Error('Aucun fichier choisi'); return { type, src: m.url, layout: v('#i-lay'), label: m.name }; }
+  if (type === 'announce') return readAnnounce(o);
+  if (type === 'lower') { if (!v('#i-lt')) throw new Error('Le bandeau a besoin d\'un titre'); return { type, title: v('#i-lt'), sub: v('#i-ls'), label: v('#i-lt') }; }
+  if (!v('#i-note')) throw new Error('Écris la note'); return { type: 'note', label: v('#i-note') };
+}
+function itemModal(secId, existing) {
+  const sec = S.plan.sections.find(x => x.id === secId);
+  let type = existing ? existing.type : 'song';
+  const o = modal((existing ? 'Modifier' : 'Ajouter à « ' + esc(sec.title) + ' »'), (existing ? '' : '<select id="i-type">' + TYPES.map(([v, l]) => '<option value="' + v + '">' + l + '</option>').join('') + '</select>') + '<div id="i-body"></div>', [
+    { label: 'Annuler', fn: () => true },
+    { label: existing ? 'Enregistrer' : 'Ajouter', cls: 'primary', fn: async o => {
+      const item = await readItem(o, type);
+      if (existing) send('plan.update', { id: existing.id, item }); else send('plan.add', { sec: secId, item });
+    } },
+  ]);
+  const draw = () => { o.querySelector('#i-body').innerHTML = itemBody(type, existing); if (type === 'announce') wireAnnounce(o, existing); };
+  if (!existing) o.querySelector('#i-type').onchange = e => { type = e.target.value; draw(); };
+  draw();
+}
 
 // =====================================================================
 //                              RÉGLAGES
@@ -554,9 +822,11 @@ $('#planclear').onclick = () => { if (confirm('Vider le déroulé ?')) send('pla
 const BUILTIN_FONTS = [['"Segoe UI", Roboto, Helvetica, Arial, sans-serif', 'Segoe UI / Roboto'], ['Arial, Helvetica, sans-serif', 'Arial'], ['Georgia, "Times New Roman", serif', 'Georgia'], ['Verdana, sans-serif', 'Verdana'],
   ['"Trebuchet MS", sans-serif', 'Trebuchet'], ['"Palatino Linotype", Palatino, serif', 'Palatino'], ['"Times New Roman", serif', 'Times'], ['Impact, sans-serif', 'Impact']];
 const THEME_FIELDS = {
-  verse: [['size', 'Taille max (px)', 'num', 2], ['color', 'Couleur du texte', 'color'], ['bg', 'Couleur du fond', 'color'], ['bgAlpha', 'Opacité du fond / de la teinte (0-1)', 'num', 0.05], ['refColor', 'Couleur de la référence', 'color']],
+  verse: [['size', 'Taille max (px)', 'num', 2], ['color', 'Couleur du texte', 'color'], ['bg', 'Couleur du fond', 'color'], ['bgAlpha', 'Opacité du fond / de la teinte (0-1)', 'num', 0.05], ['refColor', 'Couleur de la référence', 'color'], ['refSize', 'Taille de la référence (% du texte)', 'num', 2]],
   lyrics: [['size', 'Taille max (px)', 'num', 2], ['weight', 'Graisse (400-900)', 'num', 100], ['color', 'Couleur du texte', 'color'], ['outline', 'Couleur du contour', 'color'], ['upper', 'Majuscules', 'bool']],
-  monitor: [['size', 'Taille max (px)', 'num', 2], ['color', 'Couleur du texte', 'color'], ['bg', 'Couleur du fond', 'color'], ['refColor', 'Couleur de la référence', 'color']],
+  monitor: [['size', 'Taille max (px)', 'num', 2], ['color', 'Couleur du texte', 'color'], ['bg', 'Couleur du fond', 'color'], ['refColor', 'Couleur de la référence', 'color'], ['refSize', 'Taille de la référence (% du texte)', 'num', 2],
+    ['chronoSize', 'Taille du chrono (px)', 'num', 4], ['chronoColor', 'Couleur du chrono', 'color'], ['chronoPos', 'Position du chrono', 'select', [['tr', 'Haut droite'], ['tl', 'Haut gauche'], ['br', 'Bas droite'], ['bl', 'Bas gauche']]]],
+  lower: [['size', 'Taille du titre (px)', 'num', 2], ['color', 'Couleur du texte', 'color'], ['bg', 'Couleur du fond', 'color'], ['bgAlpha', 'Opacité du fond (0-1)', 'num', 0.05], ['accent', 'Couleur du liseré', 'color'], ['pos', 'Position', 'select', [['left', 'Gauche'], ['center', 'Centre'], ['right', 'Droite']]]],
   media: [['panel', 'Fond des panneaux (sans image)', 'color'], ['camWidth', 'Largeur zone prédicateur (px)', 'num', 20], ['imgScale', 'Taille de l\'image (%)', 'num', 5], ['pipSize', 'Largeur petite image (px)', 'num', 20]],
 };
 function buildTheme() {
@@ -564,7 +834,7 @@ function buildTheme() {
     const box = $('#th-' + g); box.innerHTML = '';
     THEME_FIELDS[g].forEach(([k, label, type, step]) => {
       const attrs = 'data-g="' + g + '" data-k="' + k + '"';
-      const inp = type === 'color' ? '<input type="color" ' + attrs + '>' : type === 'bool' ? '<input type="checkbox" ' + attrs + '>' : '<input type="number" step="' + step + '" ' + attrs + '>';
+      const inp = type === 'color' ? '<input type="color" ' + attrs + '>' : type === 'bool' ? '<input type="checkbox" ' + attrs + '>' : type === 'select' ? '<select ' + attrs + '>' + step.map(([v, l]) => '<option value="' + v + '">' + l + '</option>').join('') + '</select>' : '<input type="number" step="' + step + '" ' + attrs + '>';
       box.insertAdjacentHTML('beforeend', '<label>' + label + '</label>' + inp);
     });
   }
@@ -632,8 +902,8 @@ $('#pvsel').onchange = e => { $('#pv').src = e.target.value; };
 async function buildUrls() {
   const info = await api('/api/info'); const host = info.ips[0] || location.hostname;
   const base = 'http://' + host + ':' + info.port;
-  const rows = [['Tout-en-un (recommandé)', '/output.html'], ['Moniteur du prédicateur (verset plein écran)', '/output.html?monitor=1'], ['Écran auxiliaire (fond vidéo + paroles/versets)', '/output.html?screen=1'],
-    ['Versets seuls', '/output.html?layer=verse'], ['Paroles seules', '/output.html?layer=lyrics'], ['Images seules', '/output.html?layer=media'], ['Tout-en-un, fond vert', '/output.html?bg=green']];
+  const rows = [['Tout-en-un (recommandé)', '/output.html'], ['Moniteur du prédicateur (verset plein écran + chrono)', '/output.html?monitor=1'], ['Écran auxiliaire (fond vidéo + paroles/versets)', '/output.html?screen=1'],
+    ['Versets seuls', '/output.html?layer=verse'], ['Paroles seules', '/output.html?layer=lyrics'], ['Images / vidéos seules', '/output.html?layer=media'], ['Bandeaux seuls', '/output.html?layer=lower'], ['Tout-en-un, fond vert', '/output.html?bg=green']];
   $('#urls').innerHTML = rows.map(r => '<tr><td>' + r[0] + '</td><td><code>' + base + r[1] + '</code></td><td><button class="sm" data-c="' + base + r[1] + '">Copier</button></td></tr>').join('') +
     '<tr><td>Régie (téléphone / tablette)</td><td><code>' + base + '/</code></td><td></td></tr>';
   $('#urls').onclick = e => { const c = e.target.dataset.c; if (c) { navigator.clipboard && navigator.clipboard.writeText(c); toast('Adresse copiée'); } };
@@ -649,20 +919,81 @@ $('#bgo').onclick = async () => {
   } catch (e) { $('#bmsg').textContent = '✖ ' + e.message; }
 };
 
+// ---------- mise à jour ----------
+function renderUpdate() {
+  const u = S.update;
+  $('#updbar').style.display = u.available && !u.installing && !updLater ? 'flex' : 'none';
+  $('#updv').textContent = u.latest;
+  $('#updinfo').textContent = u.installing ? 'Installation en cours…' : 'Version installée : ' + u.current + (u.checking ? ' — vérification…' : u.error ? ' — ' + u.error : u.available ? ' — ⬆ la version ' + u.latest + ' est disponible' : u.latest ? ' — à jour ✔' : '');
+  $('#updinst').style.display = u.available ? '' : 'none'; $('#updinst').disabled = u.installing;
+  $('#updrb').style.display = u.canRollback ? '' : 'none';
+}
+let updLater = false;
+function waitRestart() {
+  toast('Redémarrage de l\'appli…'); let tries = 0, down = false;
+  const iv = setInterval(async () => {
+    tries++;
+    try { await fetch('/api/info', { cache: 'no-store' }); if (down || tries > 7) { clearInterval(iv); location.reload(); } } catch { down = true; }
+    if (tries > 45) { clearInterval(iv); toast('Relance l\'appli (start.bat / start.command) puis recharge cette page.'); }
+  }, 1000);
+}
+async function doInstall() {
+  if (!confirm('Installer la version ' + S.update.latest + ' ?\nL\'appli redémarre (quelques secondes). Tes données ne sont pas touchées. Coupe la projection avant si un culte est en cours.')) return;
+  toast('Installation en cours…');
+  try { await api('/api/update/install', { method: 'POST' }); waitRestart(); } catch (e) { toast(e.message); }
+}
+$('#updgo').onclick = $('#updinst').onclick = doInstall;
+$('#updlater').onclick = () => { updLater = true; renderUpdate(); };
+$('#updcheck').onclick = async () => { try { await api('/api/update/check'); } catch (e) { toast(e.message); } };
+$('#updrb').onclick = async () => {
+  if (!confirm('Revenir à la version précédente de l\'appli ? (tes données ne changent pas)')) return;
+  try { await api('/api/update/rollback', { method: 'POST' }); waitRestart(); } catch (e) { toast(e.message); }
+};
+
+// ---------- sauvegarde des Bibles ----------
+function renderBackup() {
+  const b = S.backup;
+  if (document.activeElement !== $('#bkdir')) $('#bkdir').value = S.prefs.backupDir || '';
+  $('#bkinfo').textContent = b.error ? '⚠ ' + b.error : b.dir ? '✔ Copie automatique active : ' + b.count + ' Bible(s) dans ce dossier' + (b.last ? ' (dernière copie ' + new Date(b.last).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ')' : '') : 'Copie automatique désactivée.';
+}
+$('#bkset').onclick = () => { send('prefs.set', { key: 'backupDir', value: $('#bkdir').value }); toast('Dossier enregistré'); };
+$('#bkrest').onclick = () => $('#bkf').click();
+$('#bkf').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  if (!confirm('Restaurer les Bibles de ce zip ? Une Bible du même identifiant sera remplacée.')) return;
+  try { const j = await api('/api/backup/restore', { method: 'POST', body: f }); toast('Restaurées : ' + j.restored.join(', ')); bibles = await api('/api/bibles'); Object.keys(bookCache).forEach(k => delete bookCache[k]); renderBibles(); } catch (err) { toast(err.message); }
+};
+$('#bkfolder').onclick = async () => {
+  try { const j = await api('/api/backup/restore-folder', { method: 'POST' }); toast(j.restored.length ? 'Récupérées : ' + j.restored.join(', ') : 'Rien à récupérer : toutes les Bibles du dossier sont déjà là'); bibles = await api('/api/bibles'); renderBibles(); } catch (err) { toast(err.message); }
+};
+
+// ---------- chronomètre ----------
+const fmtChrono = ms => { const t = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = t % 60, p = n => String(n).padStart(2, '0'); return h ? h + ':' + p(m) + ':' + p(sec) : p(m) + ':' + p(sec); };
+function tickChrono() { if (!S) return; const c = S.chrono; $('#chtime').textContent = fmtChrono(c.base + (c.running ? Date.now() + chronoOffset - c.startedAt : 0)); }
+setInterval(tickChrono, 250);
+$('#chgo').onclick = () => send(S.chrono.running ? 'chrono.pause' : 'chrono.start');
+$('#chrst').onclick = () => send('chrono.reset');
+$('#chvis').onchange = e => send('chrono.visible', { on: e.target.checked });
+
 // =====================================================================
 //                                ÉTAT
 // =====================================================================
 function renderState() {
   const L = S.live;
-  [['verse', 'Verset'], ['lyrics', 'Paroles'], ['media', 'Image']].forEach(([k, n]) => { const c = $('#c-' + k); c.classList.toggle('live', L[k].on); c.textContent = (L[k].on ? '● ' : '') + n; });
+  [['verse', 'Verset'], ['lyrics', 'Paroles'], ['media', 'Image'], ['lower', 'Bandeau']].forEach(([k, n]) => { const c = $('#c-' + k); c.classList.toggle('live', L[k].on); c.textContent = (L[k].on ? '● ' : '') + n; });
   const lc = (id, on, txt) => { const e = $('#' + id); e.classList.toggle('on', on); e.textContent = on ? '● EN DIRECT' + (txt ? ' : ' + txt : '') : 'Hors antenne'; };
-  lc('lc-verse', L.verse.on, L.verse.ref); lc('lc-lyrics', L.lyrics.on, L.lyrics.title); lc('lc-media', L.media.on, L.media.name);
+  lc('lc-verse', L.verse.on, L.verse.ref); lc('lc-lyrics', L.lyrics.on, L.lyrics.title); lc('lc-media', L.media.on, L.media.name); lc('lc-lower', L.lower.on, L.lower.title);
+  $('#lthide').style.display = L.lower.on ? '' : 'none';
+  const vd = L.media.on && L.media.kind === 'video', V = L.media.video;
+  $('#vidctl').style.display = vd ? '' : 'none';
+  if (vd) { $('#vplay').textContent = V.playing ? '⏸ Pause' : '▶ Lecture'; $('#vloop').textContent = '🔁 Boucle : ' + (V.loop ? 'oui' : 'non'); $('#vmute').textContent = V.muted ? '🔇 Son : coupé' : '🔊 Son : oui'; }
+  $('#chgo').textContent = S.chrono.running ? '⏸' : '▶'; $('#chgo').title = S.chrono.running ? 'Pause' : 'Démarrer'; $('#chvis').checked = S.chrono.visible; tickChrono();
   document.querySelectorAll('#vlay button').forEach(b => b.classList.toggle('on', b.dataset.v === L.verse.layout));
   document.querySelectorAll('#llay button').forEach(b => b.classList.toggle('on', b.dataset.v === L.lyrics.layout));
   document.querySelectorAll('#mlay button').forEach(b => b.classList.toggle('on', b.dataset.v === L.media.layout));
   $('#guide').checked = S.guide; $('#p-auto').checked = S.prefs.autoHide; $('#p-direct').checked = S.prefs.directClick;
   if (document.activeElement !== $('#bgdim')) $('#bgdim').value = Math.round((S.background.dim || 0) * 100);
-  renderPlan(); renderSong(); markMedia(); syncTheme(); markVerses(false);
+  renderPlan(); renderLowers(); renderUpdate(); renderBackup(); renderSong(); markMedia(); syncTheme(); markVerses(false);
   if (!document.querySelector('#vers input') && bibles.length) renderBibles();
   // la sélection suit le verset en direct (boutons ◀ ▶, déroulé…)
   const lp = L.verse.on ? JSON.stringify(L.verse.p) : '';
@@ -681,7 +1012,7 @@ $('#next').onclick = () => send('step', { dir: 1 });
 $('#prev').onclick = () => send('step', { dir: -1 });
 $('#hideall').onclick = () => send('hide.all');
 addEventListener('keydown', e => {
-  if (e.key === 'Escape') { send('hide.all'); return; }
+  if (e.key === 'Escape') { const m = document.querySelector('.ovl'); if (m) m.remove(); else send('hide.all'); return; }
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); send('step', { dir: 1 }); }
   if (e.key === 'ArrowLeft') { e.preventDefault(); send('step', { dir: -1 }); }
