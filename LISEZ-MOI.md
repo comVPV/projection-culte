@@ -91,8 +91,8 @@ Onglet Images / annonces : un clic sur une vidéo l'affiche (mêmes dispositions
 Format sûr : **MP4 (H.264 + AAC)** ou **WebM**. Un .mov d'iPhone (HEVC) peut ne pas se lire : convertis-le en MP4.
 
 ## Chrono du prédicateur
-En haut de la régie : ⏱ **▶ / ⏸ / ⟲**. Il compte le temps écoulé et s'affiche en coin du moniteur du prédicateur uniquement
-(case « moniteur » pour l'afficher ou le cacher ; taille, couleur, coin : Réglages > Moniteur). Aucune limite ni alerte.
+En haut de la régie : ⏱ **▶ / ⏸ / ⟲**. Il compte le temps écoulé et s'affiche en bas au centre du moniteur du prédicateur uniquement
+(case « moniteur » pour l'afficher ou le cacher ; taille, couleurs, fond, position : Réglages > Moniteur). Aucune limite ni alerte.
 
 ## Raccourcis
 `→` ou `Espace` : suivant (strophe suivante, puis élément suivant du déroulé) — `←` : précédent — `Échap` : tout masquer.
