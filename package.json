@@ -1,0 +1,13 @@
+{
+  "name": "culte-projection",
+  "version": "0.3.0",
+  "description": "Projection de versets, paroles et diapos pour le culte (OBS / vMix)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "ws": "^8.18.0"
+  }
+}

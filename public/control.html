@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Régie — Projection du culte</title>
+<style>
+  :root { --bg:#12151b; --card:#1b2029; --line:#2a3140; --txt:#e8ecf3; --dim:#8b95a8; --acc:#4c8dff; --live:#ff4d4f; --ok:#1f9d55; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:15px/1.4 -apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
+  header { display:flex; align-items:center; gap:10px; padding:10px 16px; background:var(--card); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0 auto 0 0; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--live); display:inline-block; margin-right:6px; }
+  .dot.ok { background:#2ecc71; }
+  button { background:#272e3c; color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:8px 12px; font:inherit; cursor:pointer; }
+  button:hover { background:#2f3849; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#fff; font-weight:600; }
+  button.danger { background:#5a2327; border-color:#7a2f34; }
+  button.on { background:var(--acc); border-color:var(--acc); color:#fff; }
+  button.sm { padding:4px 8px; font-size:13px; }
+  input[type=text], input:not([type]), textarea, select { background:#10141b; color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:9px 11px; font:inherit; width:100%; }
+  textarea { min-height:260px; resize:vertical; font-family:inherit; }
+  main { display:grid; grid-template-columns: minmax(340px, 1fr) minmax(340px, 560px); gap:16px; padding:16px; max-width:1500px; margin:0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } .right { order:-1; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .tabs { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
+  .tab { display:none; } .tab.on { display:block; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0; }
+  .row > input[type=text], .row > input:not([type]) { flex:1; min-width:120px; }
+  .lbl { color:var(--dim); font-size:13px; margin:14px 0 4px; }
+  .preview { aspect-ratio:16/9; width:100%; border:0; border-radius:10px; background:#000; }
+  .chips { display:flex; gap:8px; margin:10px 0; }
+  .chip { padding:4px 10px; border-radius:20px; background:#272e3c; color:var(--dim); font-size:13px; }
+  .chip.live { background:var(--live); color:#fff; font-weight:700; }
+  /* barre Projeter / Masquer — même place dans chaque onglet */
+  .bar { display:flex; gap:8px; margin:8px 0 4px; }
+  .bar button { flex:1; padding:13px 10px; font-size:16px; font-weight:700; color:#fff; }
+  .bar .go { background:var(--ok); border-color:var(--ok); } .bar .go:hover { background:#25b565; }
+  .bar .stop { background:#c0392b; border-color:#c0392b; } .bar .stop:hover { background:#d9473a; }
+  .livechip { font-size:13px; color:var(--dim); margin:2px 2px 6px; min-height:18px; }
+  .livechip.on { color:#ff7875; font-weight:700; }
+  .vtxt { background:#10141b; border-radius:8px; padding:10px 12px; margin:6px 0; }
+  .vtxt b { color:#f5c542; }
+  .list { max-height:50vh; overflow:auto; }
+  .item { display:flex; gap:8px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin:5px 0; cursor:pointer; }
+  .item:hover { background:#222a38; } .item.cur { border-color:var(--live); background:#2b2024; }
+  .item .t { flex:1; }
+  .sec { white-space:pre-line; padding:10px 12px; border:1px solid var(--line); border-radius:8px; margin:6px 0; cursor:pointer; background:#10141b; }
+  .sec:hover { border-color:var(--acc); } .sec.cur { border-color:var(--live); background:#2b2024; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px; }
+  .thumb { position:relative; border:2px solid transparent; border-radius:8px; overflow:hidden; cursor:pointer; background:#000; aspect-ratio:16/9; }
+  .thumb img, .thumb video { width:100%; height:100%; object-fit:cover; display:block; }
+  .thumb.cur { border-color:var(--live); }
+  .thumb .x { position:absolute; top:3px; right:3px; background:rgba(0,0,0,.7); border:0; padding:2px 7px; }
+  .hint { color:var(--dim); font-size:13px; }
+  .toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:#7a2f34; padding:10px 16px; border-radius:10px; display:none; z-index:10; max-width:90vw; }
+  table { width:100%; border-collapse:collapse; } td { padding:5px 4px; border-bottom:1px solid var(--line); vertical-align:middle; font-size:13px; }
+  td code { color:#9cc2ff; word-break:break-all; }
+  .grp { display:grid; grid-template-columns: 1fr 1fr; gap:6px 12px; align-items:center; margin-top:8px; }
+  .grp label { color:var(--dim); font-size:13px; }
+  .grp input[type=color] { width:100%; height:34px; padding:2px; }
+  details { margin-top:14px; } summary { cursor:pointer; color:var(--dim); font-size:14px; }
+  kbd { background:#272e3c; border-radius:4px; padding:1px 6px; font-size:12px; }
+  /* parcours Bible */
+  .crumb { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:4px 0 8px; }
+  .crumb .sep { color:var(--dim); }
+  .bkgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(105px,1fr)); gap:6px; }
+  .bkgrid button { padding:8px 6px; font-size:13px; text-align:center; }
+  .nums { display:grid; grid-template-columns:repeat(auto-fill,minmax(52px,1fr)); gap:6px; }
+  .nums button { padding:10px 0; }
+  .vrow { display:flex; gap:10px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin:4px 0; cursor:pointer; background:#10141b; }
+  .vrow:hover { border-color:var(--acc); } .vrow.sel { border-color:var(--acc); background:#1b2a47; } .vrow.live { border-color:var(--live); background:#2b2024; }
+  .vrow b { color:#f5c542; min-width:26px; text-align:right; }
+  .tt { color:var(--dim); font-size:12px; margin:10px 0 4px; text-transform:uppercase; letter-spacing:.05em; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⛪ Régie — Projection du culte</h1>
+  <span><span class="dot" id="dot"></span><span id="conn">Connexion…</span></span>
+  <button id="prev">◀ Précédent</button>
+  <button id="next" class="primary">Suivant ▶</button>
+  <button id="hideall" class="danger">Tout masquer (Échap)</button>
+</header>
+
+<main>
+  <section class="card left">
+    <div class="tabs" id="tabs">
+      <button data-t="verse" class="on">📖 Verset</button>
+      <button data-t="songs">🎵 Chants</button>
+      <button data-t="media">🖼 Images / annonces</button>
+      <button data-t="plan">📋 Déroulé</button>
+      <button data-t="set">⚙ Réglages</button>
+    </div>
+
+    <!-- ================= VERSET ================= -->
+    <div class="tab on" id="t-verse">
+      <div class="row"><input id="ref" placeholder="Un livre (Jean, Ps…) ou une référence (Jn 3:16)" autocomplete="off" autofocus></div>
+      <div class="bar"><button class="go" id="vgo">▶ Projeter</button><button class="stop" id="vhide">■ Masquer</button></div>
+      <div class="livechip" id="lc-verse"></div>
+      <div id="vpreview"></div>
+
+      <div class="lbl">Parcourir la Bible</div>
+      <div class="crumb" id="crumb"></div>
+      <div class="row"><button class="sm" id="rangebtn">Plage de versets : non</button><span class="hint">ou Maj + clic sur un 2ᵉ verset</span></div>
+      <div id="browse" class="list"></div>
+
+      <div class="lbl">Versions (plusieurs = côte à côte)</div>
+      <div class="row" id="vers"></div>
+      <div class="lbl">Affichage</div>
+      <div class="row" id="vlay"></div>
+      <div class="row"><button id="vprev">◀ Verset préc.</button><button id="vnext">Verset suiv. ▶</button><button id="vplan">➕ Déroulé</button></div>
+
+      <div class="lbl">Recherche par mots</div>
+      <div class="row"><input id="q" placeholder="ex : bon berger"><select id="qt" style="width:auto"><option value="all">Toute la Bible</option><option value="ot">Ancien Testament</option><option value="nt">Nouveau Testament</option><option value="book">Livre ouvert</option></select><button id="qgo">Chercher</button></div>
+      <div id="qinfo" class="hint"></div>
+      <div id="qres" class="list"></div>
+    </div>
+
+    <!-- ================= CHANTS ================= -->
+    <div class="tab" id="t-songs">
+      <div id="songview">
+        <div class="bar"><button class="go" id="lgo">▶ Afficher</button><button class="stop" id="lhide">■ Masquer</button></div>
+        <div class="livechip" id="lc-lyrics"></div>
+        <div class="row" id="llay"></div>
+        <div class="row"><input id="sfilter" placeholder="Filtrer les chants…"><button id="snew" class="primary">➕ Nouveau</button><button id="spptx" class="sm">📥 PowerPoint</button><input type="file" id="spptxf" accept=".pptx" hidden></div>
+        <div class="hint">Un clic sur une strophe l'affiche tout de suite.</div>
+        <div class="list" id="slist"></div>
+        <div id="sdetail"></div>
+      </div>
+      <div id="songedit" style="display:none">
+        <div class="row"><input id="etitle" placeholder="Titre du chant"></div>
+        <div class="hint">Sépare les strophes / refrains par une ligne vide. Chaque bloc = une diapo de paroles.</div>
+        <textarea id="etext" placeholder="Strophe 1…&#10;&#10;Refrain…"></textarea>
+        <div class="row"><button class="primary" id="esave">Enregistrer</button><button id="ecancel">Annuler</button><button class="danger" id="edel">Supprimer</button></div>
+      </div>
+    </div>
+
+    <!-- ================= MÉDIAS ================= -->
+    <div class="tab" id="t-media">
+      <div class="bar"><button class="go" id="mgo">▶ Afficher</button><button class="stop" id="mhide">■ Masquer</button></div>
+      <div class="livechip" id="lc-media"></div>
+      <div class="row"><button class="primary" id="mup">⬆ Ajouter images / vidéos</button><input type="file" id="mupf" accept="image/*,video/mp4,video/webm" multiple hidden></div>
+      <div class="hint">Astuce : dans PowerPoint, <i>Fichier → Exporter → PNG</i> puis ajoute les images ici. Un clic sur une image l'affiche.</div>
+      <div class="lbl">Disposition (le prédicateur reste visible dans la zone libre)</div>
+      <div class="row" id="mlay"></div>
+      <div class="grid" id="mgrid"></div>
+
+      <div class="lbl" style="margin-top:18px">🎞 Fond pour écrans auxiliaires (vidéo en boucle ou image)</div>
+      <div class="hint">Uniquement sur la sortie « écran auxiliaire » (Réglages). Les paroles et versets passent par-dessus.</div>
+      <div class="row"><button id="bgnone" class="sm">Aucun fond</button>
+        <label class="hint" style="flex:1">Assombrir : <input type="range" id="bgdim" min="0" max="90" step="5" style="width:60%;vertical-align:middle"></label></div>
+      <div class="grid" id="vgrid"></div>
+    </div>
+
+    <!-- ================= DÉROULÉ ================= -->
+    <div class="tab" id="t-plan">
+      <div class="row"><input id="note" placeholder="Ajouter une note (ex : Offrande, Annonces…)"><button id="noteadd">➕ Note</button><button id="planclear" class="danger">Vider</button></div>
+      <div class="hint">Ajoute des éléments depuis les autres onglets (➕ Déroulé). <kbd>→</kbd> / <kbd>Espace</kbd> = suivant, <kbd>←</kbd> = précédent, <kbd>Échap</kbd> = tout masquer.</div>
+      <div id="planlist"></div>
+    </div>
+
+    <!-- ================= RÉGLAGES ================= -->
+    <div class="tab" id="t-set">
+      <div class="lbl">Adresses à coller dans OBS / vMix / navigateurs</div>
+      <table id="urls"></table>
+      <div class="hint">OBS : source « Navigateur », 1920×1080. vMix : Add Input → Web Browser. Ajoute <code>?bg=green</code> si la transparence pose problème.</div>
+
+      <details open><summary>Préférences de la régie</summary>
+        <div class="row"><label><input type="checkbox" id="p-auto"> Masquer automatiquement quand je change d'onglet (Verset / Chants / Images)</label></div>
+        <div class="row"><label><input type="checkbox" id="p-direct"> Projection directe : un clic sur un verset l'affiche tout de suite</label></div>
+        <div class="row"><label><input type="checkbox" id="guide"> Guide « zone caméra » (pour caler OBS / vMix)</label></div>
+      </details>
+
+      <details open><summary>Police (commune aux versets, paroles et moniteur)</summary>
+        <div class="row"><select id="gfont"></select></div>
+        <div class="row"><button id="fontup" class="sm">⬆ Importer une police…</button><input type="file" id="fontf" accept=".ttf,.otf,.woff,.woff2" multiple hidden><span class="hint">.ttf .otf .woff .woff2</span></div>
+        <div id="fontlist"></div>
+      </details>
+
+      <details><summary>Apparence des versets</summary><div class="grp" id="th-verse"></div></details>
+      <details><summary>Apparence des paroles</summary><div class="grp" id="th-lyrics"></div></details>
+      <details><summary>Moniteur du prédicateur (verset plein écran)</summary><div class="grp" id="th-monitor"></div></details>
+      <details><summary>Images / annonces : zone image et fond</summary><div class="grp" id="th-media"></div></details>
+
+      <details><summary>Images de fond (versets, annonces, moniteur)</summary>
+        <div class="hint">Choisis une image parmi celles de l'onglet Images, ou importe-en une nouvelle.</div>
+        <div class="grp" id="bgs"></div>
+      </details>
+      <div class="row"><button id="threset" class="sm">Réinitialiser l'apparence</button></div>
+
+      <details><summary>Importer une Bible</summary>
+        <div class="grp">
+          <label>Identifiant (ex : lsg)</label><input id="bid" placeholder="lsg">
+          <label>Nom</label><input id="bname" placeholder="Louis Segond 1910">
+          <label>Abréviation</label><input id="babbr" placeholder="LSG">
+          <label>Langue</label><select id="blang"><option value="fr">Français</option><option value="en">Anglais</option></select>
+        </div>
+        <div class="row"><input type="file" id="bfile" accept=".json,.xml"><button class="primary" id="bgo">Importer</button></div>
+        <div class="hint">Formats : JSON (livres, chapitres, versets) ou XML Zefania. Un livre manquant est toléré.</div>
+        <div id="bmsg" class="hint"></div>
+      </details>
+    </div>
+  </section>
+
+  <section class="right">
+    <div class="card">
+      <div class="row" style="margin-top:0"><select id="pvsel">
+        <option value="/output.html?layer=all&bg=checker">Aperçu : sortie OBS / vMix (transparent)</option>
+        <option value="/output.html?screen=1">Aperçu : écran auxiliaire (avec fond)</option>
+        <option value="/output.html?monitor=1">Aperçu : moniteur du prédicateur</option>
+      </select></div>
+      <iframe class="preview" id="pv" src="/output.html?layer=all&bg=checker"></iframe>
+      <div class="chips"><span class="chip" id="c-verse">Verset</span><span class="chip" id="c-lyrics">Paroles</span><span class="chip" id="c-media">Image</span></div>
+      <div class="hint">Aperçu de la sortie (damier = transparent).</div>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const el = h => { const d = document.createElement('div'); d.innerHTML = h.trim(); return d.firstChild; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let S = null, bibles = [], songs = [], media = [], curSong = null, curSection = 0, selMedia = null, ws;
+let sel = null, anchor = null, rangeMode = false, browse = { mode: 'books' }, lastLiveP = '', renderSeq = 0;
+
+const VL = [['lower', 'Bandeau bas'], ['side', 'Panneau côté'], ['center', 'Centré'], ['full', 'Plein écran']];
+const LL = [['bottom', 'Bas'], ['center', 'Centre']];
+const ML = [['full', 'Plein écran'], ['split-r', 'Image à droite'], ['split-l', 'Image à gauche'], ['pip-br', 'Petite ↘'], ['pip-bl', 'Petite ↙'], ['pip-tr', 'Petite ↗'], ['pip-tl', 'Petite ↖']];
+
+// ---------- réseau ----------
+function connect() {
+  ws = new WebSocket('ws://' + location.host);
+  ws.onopen = () => { $('#dot').classList.add('ok'); $('#conn').textContent = 'Connecté'; };
+  ws.onclose = () => { $('#dot').classList.remove('ok'); $('#conn').textContent = 'Reconnexion…'; setTimeout(connect, 1000); };
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'state') { S = m.state; renderState(); }
+    if (m.type === 'toast') toast(m.msg);
+  };
+}
+const send = (cmd, a = {}) => ws && ws.readyState === 1 && ws.send(JSON.stringify({ cmd, a }));
+async function api(path, opt = {}) {
+  const r = await fetch(path, opt); const j = await r.json();
+  if (!r.ok) throw new Error(j.error || 'Erreur'); return j;
+}
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 4000); }
+
+// ---------- onglets + masquage automatique ----------
+const HIDE = { verse: ['verse', 'verse.hide'], songs: ['lyrics', 'lyrics.hide'], media: ['media', 'media.hide'] };
+$('#tabs').addEventListener('click', e => {
+  const t = e.target.dataset.t; if (!t) return;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b === e.target));
+  document.querySelectorAll('.tab').forEach(d => d.classList.toggle('on', d.id === 't-' + t));
+  if (S && S.prefs.autoHide && HIDE[t]) for (const k in HIDE) if (k !== t && S.live[HIDE[k][0]].on) send(HIDE[k][1]);
+});
+
+// ---------- boutons de disposition ----------
+function layoutButtons(box, kind, list) {
+  box.innerHTML = '';
+  list.forEach(([v, l]) => { const b = el('<button class="sm" data-v="' + v + '">' + l + '</button>'); b.onclick = () => send('layout.set', { kind, layout: v }); box.appendChild(b); });
+}
+layoutButtons($('#vlay'), 'verse', VL); layoutButtons($('#llay'), 'lyrics', LL); layoutButtons($('#mlay'), 'media', ML);
+
+// =====================================================================
+//                              VERSETS
+// =====================================================================
+const selVersions = () => [...document.querySelectorAll('#vers input:checked')].map(i => i.value);
+const firstVer = () => selVersions()[0];
+
+function renderBibles() {
+  const pref = (S && S.prefs.versions) || [];
+  const have = bibles.filter(b => pref.includes(b.id));
+  $('#vers').innerHTML = '';
+  bibles.forEach((b, i) => {
+    const on = have.length ? pref.includes(b.id) : i === 0;
+    const l = el('<label style="margin-right:12px"><input type="checkbox" value="' + b.id + '"' + (on ? ' checked' : '') + '> ' + esc(b.abbr) + ' <span class="hint">' + esc(b.name) + '</span></label>');
+    l.querySelector('input').onchange = () => { send('versions.set', { versions: selVersions() }); renderBrowse(); previewSel(); if (S.live.verse.on && sel) project(); };
+    $('#vers').appendChild(l);
+  });
+  if (!have.length && bibles.length) send('versions.set', { versions: [bibles[0].id] });
+  renderBrowse();
+}
+
+async function previewSel(fillInput) {
+  const box = $('#vpreview');
+  if (!sel) { box.innerHTML = ''; return; }
+  const v = selVersions().join(',');
+  const j = await api('/api/verse?b=' + sel.book + '&c=' + sel.chapter + '&v1=' + sel.v1 + '&v2=' + sel.v2 + '&v=' + v);
+  if (!j.ok) { box.innerHTML = '<div class="hint">Passage introuvable dans cette version.</div>'; return; }
+  if (fillInput) $('#ref').value = j.ref;
+  box.innerHTML = j.versions.map(x => '<div class="vtxt"><b>' + esc(j.ref) + ' — ' + esc(x.abbr) + '</b><br>' + x.texts.map(t => (x.texts.length > 1 ? '<sup>' + t.v + '</sup> ' : '') + esc(t.text)).join(' ') + '</div>').join('') +
+    '<div class="hint">Prêt : appuie sur « Projeter » (ou Entrée).</div>';
+}
+
+function project() {
+  if (!sel) return toast('Choisis un verset (parcours ci-dessous) ou tape une référence');
+  send('verse.show', { p: sel, versions: selVersions(), ref: $('#ref').value });
+}
+
+// --- saisie dans la barre
+let typeT;
+$('#ref').oninput = () => {
+  clearTimeout(typeT);
+  typeT = setTimeout(async () => {
+    const t = $('#ref').value.trim();
+    if (!t) { sel = null; previewSel(); browse = { mode: 'books' }; renderBrowse(); return; }
+    if (/\d/.test(t)) {
+      try {
+        const j = await api('/api/verse?ref=' + encodeURIComponent(t) + '&v=' + selVersions().join(','));
+        if (j.ok) {
+          sel = j.p; anchor = sel.v1;
+          const bk = (await getBooks()).find(b => b.i === sel.book);
+          browse = { mode: 'verses', book: sel.book, bookName: bk ? bk.name : '', chapter: sel.chapter, nch: bk ? bk.chapters : 0 };
+          previewSel(false); renderBrowse();
+        } else { sel = null; $('#vpreview').innerHTML = '<div class="hint">Référence non reconnue…</div>'; }
+      } catch {}
+    } else { sel = null; $('#vpreview').innerHTML = ''; browse = { mode: 'books', filter: t }; renderBrowse(); }
+  }, 220);
+};
+$('#ref').onkeydown = async e => {
+  if (e.key !== 'Enter') return;
+  const t = $('#ref').value.trim();
+  if (/\d/.test(t)) { clearTimeout(typeT); await new Promise(r => setTimeout(r, 260)); project(); return; }
+  const list = await getBooks(t);
+  if (list.length === 1) openBook(list[0]);
+};
+$('#vgo').onclick = project;
+$('#vhide').onclick = () => send('verse.hide');
+$('#vprev').onclick = () => send('verse.nav', { dir: -1 });
+$('#vnext').onclick = () => send('verse.nav', { dir: 1 });
+$('#vplan').onclick = () => {
+  if (!sel) return toast('Choisis d\'abord un verset');
+  send('plan.add', { item: { type: 'verse', p: sel, ref: $('#ref').value, versions: selVersions(), layout: S.live.verse.layout, label: $('#ref').value || 'Verset' } }); toast('Ajouté au déroulé');
+};
+$('#rangebtn').onclick = () => { rangeMode = !rangeMode; $('#rangebtn').textContent = 'Plage de versets : ' + (rangeMode ? 'oui' : 'non'); $('#rangebtn').classList.toggle('on', rangeMode); };
+
+// --- parcours livres / chapitres / versets
+const bookCache = {};
+async function getBooks(filter) {
+  const v = firstVer(); if (!v) return [];
+  if (filter) return api('/api/bible/books?v=' + v + '&q=' + encodeURIComponent(filter));
+  return bookCache[v] || (bookCache[v] = await api('/api/bible/books?v=' + v));
+}
+function openBook(b) { browse = { mode: 'chapters', book: b.i, bookName: b.name, nch: b.chapters }; $('#ref').value = b.name + ' '; renderBrowse(); }
+
+async function renderBrowse() {
+  const my = ++renderSeq, box = $('#browse'), crumb = $('#crumb'), v = firstVer();
+  if (!v) { box.innerHTML = '<div class="hint">Coche une version de la Bible.</div>'; crumb.innerHTML = ''; return; }
+  const crumbBtn = (t, fn) => { const b = el('<button class="sm">' + esc(t) + '</button>'); b.onclick = fn; return b; };
+  crumb.innerHTML = '';
+  crumb.appendChild(crumbBtn('Livres', () => { browse = { mode: 'books' }; renderBrowse(); }));
+  if (browse.mode !== 'books') {
+    crumb.insertAdjacentHTML('beforeend', '<span class="sep">›</span>');
+    crumb.appendChild(crumbBtn(browse.bookName, () => { browse = { mode: 'chapters', book: browse.book, bookName: browse.bookName, nch: browse.nch }; renderBrowse(); }));
+  }
+  if (browse.mode === 'verses') crumb.insertAdjacentHTML('beforeend', '<span class="sep">›</span><b>chapitre ' + browse.chapter + '</b>');
+
+  if (browse.mode === 'books') {
+    const books = await getBooks(browse.filter); if (my !== renderSeq) return;
+    if (!books.length) { box.innerHTML = '<div class="hint">Aucun livre ne correspond.</div>'; return; }
+    box.innerHTML = '';
+    const groups = browse.filter ? [[null, books]] : [['Ancien Testament', books.filter(b => b.i < 39)], ['Nouveau Testament', books.filter(b => b.i >= 39)]];
+    groups.forEach(([title, list]) => {
+      if (!list.length) return;
+      if (title) box.insertAdjacentHTML('beforeend', '<div class="tt">' + title + '</div>');
+      const g = el('<div class="bkgrid"></div>');
+      list.forEach(b => { const x = el('<button>' + esc(b.name) + '</button>'); x.onclick = () => openBook(b); g.appendChild(x); });
+      box.appendChild(g);
+    });
+  } else if (browse.mode === 'chapters') {
+    box.innerHTML = '<div class="tt">Choisis un chapitre</div>';
+    const g = el('<div class="nums"></div>');
+    for (let c = 1; c <= browse.nch; c++) { const x = el('<button>' + c + '</button>'); x.onclick = () => { browse = { ...browse, mode: 'verses', chapter: c }; sel = null; anchor = null; $('#ref').value = browse.bookName + ' ' + c + ':'; previewSel(); renderBrowse(); }; g.appendChild(x); }
+    box.appendChild(g);
+  } else {
+    const rows = await api('/api/bible/chapter?v=' + v + '&b=' + browse.book + '&c=' + browse.chapter); if (my !== renderSeq) return;
+    box.innerHTML = '';
+    rows.forEach(r => {
+      const d = el('<div class="vrow" data-v="' + r.v + '"><b>' + r.v + '</b><span>' + esc(r.text) + '</span></div>');
+      d.onclick = e => pickVerse(r.v, e.shiftKey);
+      box.appendChild(d);
+    });
+    markVerses(true);
+  }
+}
+function markVerses(scroll) {
+  const L = S && S.live.verse.on && S.live.verse.p;
+  document.querySelectorAll('#browse .vrow').forEach(r => {
+    const n = +r.dataset.v;
+    r.classList.toggle('sel', !!sel && sel.book === browse.book && sel.chapter === browse.chapter && n >= sel.v1 && n <= sel.v2);
+    r.classList.toggle('live', !!L && L.book === browse.book && L.chapter === browse.chapter && n >= L.v1 && n <= L.v2);
+  });
+  if (scroll) { const s = document.querySelector('#browse .vrow.sel'); if (s) s.scrollIntoView({ block: 'center' }); }
+}
+async function pickVerse(n, shift) {
+  if ((rangeMode || shift) && sel && sel.book === browse.book && sel.chapter === browse.chapter && anchor != null) {
+    sel = { book: browse.book, chapter: browse.chapter, v1: Math.min(anchor, n), v2: Math.max(anchor, n) };
+    if (rangeMode) { rangeMode = false; $('#rangebtn').textContent = 'Plage de versets : non'; $('#rangebtn').classList.remove('on'); }
+  } else { sel = { book: browse.book, chapter: browse.chapter, v1: n, v2: n }; anchor = n; }
+  markVerses(false);
+  await previewSel(true);
+  if (S.prefs.directClick && sel.v1 === sel.v2) project();
+}
+
+// --- recherche par mots
+let qOffset = 0;
+async function doSearch(more) {
+  const v = firstVer(); if (!v) return toast('Choisis une version');
+  const word = $('#q').value.trim(); if (!word) return;
+  let t = $('#qt').value;
+  if (t === 'book') { if (browse.book == null) return toast('Ouvre d\'abord un livre'); t = String(browse.book); }
+  if (!more) { qOffset = 0; $('#qres').innerHTML = ''; }
+  const j = await api('/api/search?v=' + v + '&q=' + encodeURIComponent(word) + '&t=' + t + '&offset=' + qOffset);
+  const box = $('#qres'); box.querySelectorAll('.more').forEach(x => x.remove());
+  qOffset += j.items.length;
+  $('#qinfo').textContent = j.total + ' résultat' + (j.total > 1 ? 's' : '') + (j.total > qOffset ? ' (' + qOffset + ' affichés)' : '');
+  j.items.forEach(r => {
+    const d = el('<div class="item"><div class="t"><b>' + esc(r.ref) + '</b> ' + esc(r.text) + '</div></div>');
+    d.onclick = async () => {
+      sel = r.p; anchor = r.p.v1;
+      const bk = (await getBooks()).find(b => b.i === r.p.book);
+      browse = { mode: 'verses', book: r.p.book, bookName: bk ? bk.name : '', chapter: r.p.chapter, nch: bk ? bk.chapters : 0 };
+      await previewSel(true); renderBrowse();
+    };
+    box.appendChild(d);
+  });
+  if (j.total > qOffset) { const m = el('<button class="more">Voir plus…</button>'); m.onclick = () => doSearch(true); box.appendChild(m); }
+}
+$('#qgo').onclick = () => doSearch(false); $('#q').onkeydown = e => { if (e.key === 'Enter') doSearch(false); };
+
+// =====================================================================
+//                               CHANTS
+// =====================================================================
+async function loadSongs() { songs = await api('/api/songs'); renderSongs(); }
+function renderSongs() {
+  const f = $('#sfilter').value.toLowerCase();
+  $('#slist').innerHTML = '';
+  songs.filter(s => s.title.toLowerCase().includes(f)).forEach(s => {
+    const d = el('<div class="item' + (curSong === s.id ? ' cur' : '') + '"><div class="t">' + esc(s.title) + '</div><button class="sm">✏️</button></div>');
+    d.onclick = () => { curSong = s.id; curSection = 0; renderSongs(); renderSong(); };
+    d.querySelector('button').onclick = e => { e.stopPropagation(); editSong(s); };
+    $('#slist').appendChild(d);
+  });
+  if (!songs.length) $('#slist').innerHTML = '<div class="hint">Aucun chant : ➕ Nouveau, ou importe un PowerPoint.</div>';
+}
+function renderSong() {
+  const s = songs.find(x => x.id === curSong), box = $('#sdetail');
+  if (!s) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="row"><b style="flex:1">' + esc(s.title) + '</b><button class="sm" id="sadd">➕ Déroulé</button></div>';
+  s.sections.forEach((t, i) => {
+    const live = S && S.live.lyrics.on && S.live.lyrics.songId === s.id && S.live.lyrics.section === i;
+    const d = el('<div class="sec' + (live ? ' cur' : '') + '">' + esc(t) + '</div>');
+    d.onclick = () => { curSection = i; send('lyrics.show', { songId: s.id, section: i }); };
+    box.appendChild(d);
+  });
+  $('#sadd').onclick = () => { send('plan.add', { item: { type: 'song', songId: s.id, label: s.title } }); toast('Ajouté au déroulé'); };
+}
+$('#sfilter').oninput = renderSongs;
+$('#lgo').onclick = () => { if (!curSong) return toast('Choisis un chant'); send('lyrics.show', { songId: curSong, section: curSection }); };
+$('#lhide').onclick = () => send('lyrics.hide');
+let editId = null;
+function editSong(s) {
+  editId = s ? s.id : null; $('#etitle').value = s ? s.title : ''; $('#etext').value = s ? s.sections.join('\n\n') : '';
+  $('#edel').style.display = s ? '' : 'none'; $('#songview').style.display = 'none'; $('#songedit').style.display = '';
+}
+$('#snew').onclick = () => editSong(null);
+$('#ecancel').onclick = () => { $('#songview').style.display = ''; $('#songedit').style.display = 'none'; };
+$('#esave').onclick = async () => {
+  try {
+    const r = await api('/api/songs', { method: 'POST', body: JSON.stringify({ id: editId, title: $('#etitle').value, sections: $('#etext').value.split(/\n\s*\n/) }) });
+    curSong = r.id; await loadSongs(); renderSong(); $('#ecancel').click();
+  } catch (e) { toast(e.message); }
+};
+$('#edel').onclick = async () => { if (!confirm('Supprimer ce chant ?')) return; await api('/api/songs?id=' + editId, { method: 'DELETE' }); curSong = null; await loadSongs(); renderSong(); $('#ecancel').click(); };
+$('#spptx').onclick = () => $('#spptxf').click();
+$('#spptxf').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const j = await api('/api/songs/import-pptx', { method: 'POST', body: f });
+    editSong(null); $('#etitle').value = f.name.replace(/\.pptx$/i, ''); $('#etext').value = j.sections.join('\n\n');
+    toast('Texte importé : relis, corrige et enregistre');
+  } catch (err) { toast(err.message); }
+  e.target.value = '';
+};
+
+// =====================================================================
+//                               MÉDIAS
+// =====================================================================
+async function loadMedia() { media = await api('/api/media'); buildMedia(); }
+function buildMedia() {
+  const g = $('#mgrid'), vg = $('#vgrid'); g.innerHTML = ''; vg.innerHTML = '';
+  media.filter(m => m.type === 'video').forEach(m => {
+    const d = el('<div class="thumb" data-u="' + m.url + '" title="' + esc(m.name) + '"><video muted preload="metadata" src="' + m.url + '#t=0.5"></video><button class="x sm">✕</button></div>');
+    d.onclick = () => send('bg.set', { src: m.url, type: 'video' });
+    d.querySelector('.x').onclick = async e => { e.stopPropagation(); if (confirm('Supprimer « ' + m.name + ' » ?')) { await api('/api/media?name=' + encodeURIComponent(m.name), { method: 'DELETE' }); loadMedia(); } };
+    vg.appendChild(d);
+  });
+  if (!media.some(m => m.type === 'video')) vg.innerHTML = '<div class="hint">Aucune vidéo (.mp4 / .webm, courte, en boucle, idéalement < 100 Mo).</div>';
+  media.filter(m => m.type !== 'video').forEach(m => {
+    const d = el('<div class="thumb" data-u="' + m.url + '" title="' + esc(m.name) + '"><img loading="lazy" src="' + m.url + '"><button class="x sm">✕</button><button class="x sm bgb" style="top:auto;bottom:3px;right:3px" title="Utiliser comme fond d\'écran auxiliaire">Fond</button></div>');
+    d.onclick = () => { selMedia = m; send('media.show', { src: m.url, name: m.name }); };
+    d.querySelector('.bgb').onclick = e => { e.stopPropagation(); send('bg.set', { src: m.url, type: 'image' }); toast('Image définie comme fond (écran auxiliaire)'); };
+    d.querySelector('.x').onclick = async e => { e.stopPropagation(); if (confirm('Supprimer « ' + m.name + ' » ?')) { await api('/api/media?name=' + encodeURIComponent(m.name), { method: 'DELETE' }); loadMedia(); } };
+    d.oncontextmenu = e => { e.preventDefault(); send('plan.add', { item: { type: 'media', src: m.url, layout: S.live.media.layout, label: m.name } }); toast('Ajouté au déroulé'); };
+    g.appendChild(d);
+  });
+  if (!media.some(m => m.type !== 'video')) g.innerHTML = '<div class="hint">Aucune image. Clic droit sur une image = l’ajouter au déroulé.</div>';
+  buildBgSelects(); markMedia();
+}
+function markMedia() {
+  if (!S) return;
+  document.querySelectorAll('#mgrid .thumb').forEach(t => t.classList.toggle('cur', S.live.media.on && S.live.media.src === t.dataset.u));
+  document.querySelectorAll('#vgrid .thumb').forEach(t => t.classList.toggle('cur', S.background.src === t.dataset.u));
+}
+async function uploadMedia(file) { return api('/api/media?name=' + encodeURIComponent(file.name), { method: 'POST', body: file }); }
+$('#mup').onclick = () => $('#mupf').click();
+$('#mupf').onchange = async e => {
+  for (const f of e.target.files) { try { await uploadMedia(f); } catch (err) { toast(err.message); } }
+  e.target.value = ''; loadMedia();
+};
+$('#mgo').onclick = () => { if (!selMedia) return toast('Touche une image pour la choisir'); send('media.show', { src: selMedia.url, name: selMedia.name }); };
+$('#mhide').onclick = () => send('media.hide');
+$('#bgnone').onclick = () => send('bg.clear');
+$('#bgdim').oninput = e => send('bg.dim', { value: e.target.value / 100 });
+
+// =====================================================================
+//                               DÉROULÉ
+// =====================================================================
+const ICON = { song: '🎵', verse: '📖', media: '🖼', note: '📝' };
+function renderPlan() {
+  const box = $('#planlist'); box.innerHTML = '';
+  S.plan.items.forEach((it, i) => {
+    const d = el('<div class="item' + (S.plan.cursor === i ? ' cur' : '') + '"><span>' + (ICON[it.type] || '') + '</span><div class="t">' + esc(it.label || it.ref || '') + '</div>' +
+      '<button class="sm" data-a="up">▲</button><button class="sm" data-a="dn">▼</button><button class="sm" data-a="rm">✕</button></div>');
+    d.onclick = e => {
+      const a = e.target.dataset.a;
+      if (a === 'up') send('plan.move', { id: it.id, dir: -1 });
+      else if (a === 'dn') send('plan.move', { id: it.id, dir: 1 });
+      else if (a === 'rm') send('plan.remove', { id: it.id });
+      else send('plan.go', { index: i });
+    };
+    box.appendChild(d);
+  });
+  if (!S.plan.items.length) box.innerHTML = '<div class="hint" style="margin-top:12px">Déroulé vide.</div>';
+}
+$('#noteadd').onclick = () => { const v = $('#note').value.trim(); if (v) { send('plan.add', { item: { type: 'note', label: v } }); $('#note').value = ''; } };
+$('#planclear').onclick = () => { if (confirm('Vider le déroulé ?')) send('plan.clear'); };
+
+// =====================================================================
+//                              RÉGLAGES
+// =====================================================================
+const BUILTIN_FONTS = [['"Segoe UI", Roboto, Helvetica, Arial, sans-serif', 'Segoe UI / Roboto'], ['Arial, Helvetica, sans-serif', 'Arial'], ['Georgia, "Times New Roman", serif', 'Georgia'], ['Verdana, sans-serif', 'Verdana'],
+  ['"Trebuchet MS", sans-serif', 'Trebuchet'], ['"Palatino Linotype", Palatino, serif', 'Palatino'], ['"Times New Roman", serif', 'Times'], ['Impact, sans-serif', 'Impact']];
+const THEME_FIELDS = {
+  verse: [['size', 'Taille max (px)', 'num', 2], ['color', 'Couleur du texte', 'color'], ['bg', 'Couleur du fond', 'color'], ['bgAlpha', 'Opacité du fond / de la teinte (0-1)', 'num', 0.05], ['refColor', 'Couleur de la référence', 'color']],
+  lyrics: [['size', 'Taille max (px)', 'num', 2], ['weight', 'Graisse (400-900)', 'num', 100], ['color', 'Couleur du texte', 'color'], ['outline', 'Couleur du contour', 'color'], ['upper', 'Majuscules', 'bool']],
+  monitor: [['size', 'Taille max (px)', 'num', 2], ['color', 'Couleur du texte', 'color'], ['bg', 'Couleur du fond', 'color'], ['refColor', 'Couleur de la référence', 'color']],
+  media: [['panel', 'Fond des panneaux (sans image)', 'color'], ['camWidth', 'Largeur zone prédicateur (px)', 'num', 20], ['imgScale', 'Taille de l\'image (%)', 'num', 5], ['pipSize', 'Largeur petite image (px)', 'num', 20]],
+};
+function buildTheme() {
+  for (const g in THEME_FIELDS) {
+    const box = $('#th-' + g); box.innerHTML = '';
+    THEME_FIELDS[g].forEach(([k, label, type, step]) => {
+      const attrs = 'data-g="' + g + '" data-k="' + k + '"';
+      const inp = type === 'color' ? '<input type="color" ' + attrs + '>' : type === 'bool' ? '<input type="checkbox" ' + attrs + '>' : '<input type="number" step="' + step + '" ' + attrs + '>';
+      box.insertAdjacentHTML('beforeend', '<label>' + label + '</label>' + inp);
+    });
+  }
+  document.querySelectorAll('[data-g]').forEach(i => i.onchange = () => {
+    const v = i.type === 'checkbox' ? i.checked : i.type === 'number' ? parseFloat(i.value) : i.value;
+    send('theme.set', { group: i.dataset.g, key: i.dataset.k, value: v });
+  });
+  // fonds d'image
+  const bg = $('#bgs'); bg.innerHTML = '';
+  [['verse', 'Fond des versets'], ['media', 'Fond des annonces (zone image)'], ['monitor', 'Fond du moniteur prédicateur']].forEach(([g, label]) => {
+    bg.insertAdjacentHTML('beforeend', '<label>' + label + '</label><div><select data-bg="' + g + '"></select><div style="margin-top:4px"><button class="sm" data-bgup="' + g + '">⬆ Importer…</button><input type="file" accept="image/*" hidden data-bgf="' + g + '"></div></div>');
+  });
+  bg.querySelectorAll('select').forEach(s => s.onchange = () => send('theme.set', { group: s.dataset.bg, key: 'bgImage', value: s.value }));
+  bg.querySelectorAll('[data-bgup]').forEach(b => b.onclick = () => bg.querySelector('[data-bgf="' + b.dataset.bgup + '"]').click());
+  bg.querySelectorAll('[data-bgf]').forEach(f => f.onchange = async () => {
+    const file = f.files[0]; if (!file) return;
+    try { const r = await uploadMedia(file); await loadMedia(); send('theme.set', { group: f.dataset.bgf, key: 'bgImage', value: r.url }); toast('Image de fond appliquée'); } catch (err) { toast(err.message); }
+    f.value = '';
+  });
+}
+function buildBgSelects() {
+  document.querySelectorAll('#bgs select').forEach(s => {
+    const cur = S ? S.theme[s.dataset.bg].bgImage : '';
+    s.innerHTML = '<option value="">Aucune</option>' + media.filter(m => m.type !== 'video').map(m => '<option value="' + m.url + '">' + esc(m.name) + '</option>').join('');
+    s.value = cur;
+  });
+}
+let fontsKey = '';
+function buildFonts() {
+  const key = JSON.stringify(S.fonts) + S.theme.font;
+  if (key === fontsKey) return; fontsKey = key;
+  const sel = $('#gfont'); sel.innerHTML = '';
+  const opts = BUILTIN_FONTS.concat(S.fonts.map(n => ['"' + n + '", Arial, sans-serif', n + ' (importée)']));
+  if (!opts.some(o => o[0] === S.theme.font)) opts.push([S.theme.font, 'Police actuelle']);
+  opts.forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o); });
+  sel.value = S.theme.font;
+  $('#fontlist').innerHTML = S.fonts.map(n => '<div class="item" style="cursor:default"><div class="t">' + esc(n) + '</div><button class="sm" data-fdel="' + esc(n) + '">✕</button></div>').join('');
+}
+$('#gfont').onchange = e => send('theme.set', { group: 'font', value: e.target.value });
+$('#fontup').onclick = () => $('#fontf').click();
+$('#fontf').onchange = async e => {
+  for (const f of e.target.files) {
+    try { const r = await api('/api/fonts?name=' + encodeURIComponent(f.name), { method: 'POST', body: f }); send('theme.set', { group: 'font', value: '"' + r.name + '", Arial, sans-serif' }); toast('Police « ' + r.name + ' » importée et appliquée'); }
+    catch (err) { toast(err.message); }
+  }
+  e.target.value = '';
+};
+$('#fontlist').onclick = async e => { const n = e.target.dataset.fdel; if (n && confirm('Supprimer la police « ' + n + ' » ?')) await api('/api/fonts?name=' + encodeURIComponent(n), { method: 'DELETE' }); };
+
+function syncTheme() {
+  document.querySelectorAll('[data-g]').forEach(i => {
+    if (document.activeElement === i) return;
+    const v = S.theme[i.dataset.g][i.dataset.k];
+    if (i.type === 'checkbox') i.checked = !!v; else i.value = v;
+  });
+  document.querySelectorAll('#bgs select').forEach(s => { if (document.activeElement !== s && [...s.options].some(o => o.value === S.theme[s.dataset.bg].bgImage)) s.value = S.theme[s.dataset.bg].bgImage; });
+  buildFonts();
+}
+$('#threset').onclick = () => { if (confirm('Remettre toute l\'apparence par défaut ?')) send('theme.reset'); };
+$('#guide').onchange = e => send('guide.set', { on: e.target.checked });
+$('#p-auto').onchange = e => send('prefs.set', { key: 'autoHide', value: e.target.checked });
+$('#p-direct').onchange = e => send('prefs.set', { key: 'directClick', value: e.target.checked });
+$('#pvsel').onchange = e => { $('#pv').src = e.target.value; };
+
+async function buildUrls() {
+  const info = await api('/api/info'); const host = info.ips[0] || location.hostname;
+  const base = 'http://' + host + ':' + info.port;
+  const rows = [['Tout-en-un (recommandé)', '/output.html'], ['Moniteur du prédicateur (verset plein écran)', '/output.html?monitor=1'], ['Écran auxiliaire (fond vidéo + paroles/versets)', '/output.html?screen=1'],
+    ['Versets seuls', '/output.html?layer=verse'], ['Paroles seules', '/output.html?layer=lyrics'], ['Images seules', '/output.html?layer=media'], ['Tout-en-un, fond vert', '/output.html?bg=green']];
+  $('#urls').innerHTML = rows.map(r => '<tr><td>' + r[0] + '</td><td><code>' + base + r[1] + '</code></td><td><button class="sm" data-c="' + base + r[1] + '">Copier</button></td></tr>').join('') +
+    '<tr><td>Régie (téléphone / tablette)</td><td><code>' + base + '/</code></td><td></td></tr>';
+  $('#urls').onclick = e => { const c = e.target.dataset.c; if (c) { navigator.clipboard && navigator.clipboard.writeText(c); toast('Adresse copiée'); } };
+}
+$('#bgo').onclick = async () => {
+  const f = $('#bfile').files[0]; if (!f) return toast('Choisis un fichier');
+  const qs = new URLSearchParams({ id: $('#bid').value, name: $('#bname').value, abbr: $('#babbr').value, lang: $('#blang').value });
+  $('#bmsg').textContent = 'Import en cours…';
+  try {
+    const j = await api('/api/bible/import?' + qs, { method: 'POST', body: f });
+    $('#bmsg').textContent = '✔ ' + j.name + ' importée (' + j.verses + ' versets, ' + j.present + ' livres).' + (j.missing.length ? ' ⚠ Livres absents : ' + j.missing.join(', ') + '.' : '');
+    bibles = await api('/api/bibles'); delete bookCache[j.id]; renderBibles();
+  } catch (e) { $('#bmsg').textContent = '✖ ' + e.message; }
+};
+
+// =====================================================================
+//                                ÉTAT
+// =====================================================================
+function renderState() {
+  const L = S.live;
+  [['verse', 'Verset'], ['lyrics', 'Paroles'], ['media', 'Image']].forEach(([k, n]) => { const c = $('#c-' + k); c.classList.toggle('live', L[k].on); c.textContent = (L[k].on ? '● ' : '') + n; });
+  const lc = (id, on, txt) => { const e = $('#' + id); e.classList.toggle('on', on); e.textContent = on ? '● EN DIRECT' + (txt ? ' : ' + txt : '') : 'Hors antenne'; };
+  lc('lc-verse', L.verse.on, L.verse.ref); lc('lc-lyrics', L.lyrics.on, L.lyrics.title); lc('lc-media', L.media.on, L.media.name);
+  document.querySelectorAll('#vlay button').forEach(b => b.classList.toggle('on', b.dataset.v === L.verse.layout));
+  document.querySelectorAll('#llay button').forEach(b => b.classList.toggle('on', b.dataset.v === L.lyrics.layout));
+  document.querySelectorAll('#mlay button').forEach(b => b.classList.toggle('on', b.dataset.v === L.media.layout));
+  $('#guide').checked = S.guide; $('#p-auto').checked = S.prefs.autoHide; $('#p-direct').checked = S.prefs.directClick;
+  if (document.activeElement !== $('#bgdim')) $('#bgdim').value = Math.round((S.background.dim || 0) * 100);
+  renderPlan(); renderSong(); markMedia(); syncTheme(); markVerses(false);
+  if (!document.querySelector('#vers input') && bibles.length) renderBibles();
+  // la sélection suit le verset en direct (boutons ◀ ▶, déroulé…)
+  const lp = L.verse.on ? JSON.stringify(L.verse.p) : '';
+  if (lp && lp !== lastLiveP) {
+    lastLiveP = lp;
+    if (!sel || JSON.stringify(sel) !== lp) {
+      sel = L.verse.p; anchor = sel.v1; $('#ref').value = L.verse.ref;
+      getBooks().then(bs => { const bk = bs.find(b => b.i === sel.book); browse = { mode: 'verses', book: sel.book, bookName: bk ? bk.name : '', chapter: sel.chapter, nch: bk ? bk.chapters : 0 }; renderBrowse(); previewSel(false); });
+    }
+  }
+  if (!L.verse.on) lastLiveP = '';
+}
+
+// ---------- raccourcis ----------
+$('#next').onclick = () => send('step', { dir: 1 });
+$('#prev').onclick = () => send('step', { dir: -1 });
+$('#hideall').onclick = () => send('hide.all');
+addEventListener('keydown', e => {
+  if (e.key === 'Escape') { send('hide.all'); return; }
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); send('step', { dir: 1 }); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); send('step', { dir: -1 }); }
+});
+
+buildTheme(); buildUrls(); connect();
+(async () => { bibles = await api('/api/bibles'); renderBibles(); await loadSongs(); await loadMedia(); })();
+</script>
+</body>
+</html>

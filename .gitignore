@@ -1,0 +1,9 @@
+node_modules/
+# données de l'église : jamais dans le dépôt
+data/songs.json
+data/state.json
+data/media/*
+!data/media/.gitkeep
+data/fonts/
+data/bibles/*
+!data/bibles/kjv.json

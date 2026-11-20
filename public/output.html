@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Sortie</title>
+<link rel="stylesheet" id="fontcss" href="/fonts.css">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  body.bg-green { background: #00ff00; }
+  body.bg-black { background: #000; }
+  body.bg-checker { background: #555 repeating-conic-gradient(#666 0 25%, #4a4a4a 0 50%) 0 0 / 40px 40px; }
+  #stage { position: absolute; width: 1920px; height: 1080px; transform-origin: 0 0; overflow: hidden; font-family: var(--font); }
+  .layer { position: absolute; inset: 0; opacity: 0; transition: opacity .3s ease; pointer-events: none; }
+  .layer.on { opacity: 1; }
+
+  /* ---------- Fond (écrans auxiliaires : ?screen=1) ---------- */
+  #bgl { position: absolute; inset: 0; background: #000; display: none; }
+  #bgl video, #bgl img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+  #bgl .dim { position: absolute; inset: 0; background: #000; }
+
+  /* ---------- Médias ---------- */
+  #media .panel, #media .img { position: absolute; transition: all .4s ease; }
+  #media .panel { background-color: var(--m-panel); background-image: var(--m-img); background-size: cover; background-position: center; }
+  #media .img { object-fit: contain; }
+  #media.pip .img { border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.55); object-fit: cover; }
+
+  /* ---------- Versets ---------- */
+  #verse .box { position: absolute; color: var(--v-color); font-family: var(--font); overflow: hidden; box-sizing: border-box;
+    background-image: linear-gradient(var(--v-tint), var(--v-tint)), var(--v-img); background-size: cover; background-position: center; background-repeat: no-repeat; }
+  #verse .in { display: flex; gap: .9em; }
+  #verse .vb { flex: 1; min-width: 0; }
+  #verse .vtxt { line-height: 1.28; }
+  #verse .vtxt sup { font-size: .55em; color: var(--v-ref); margin-right: .25em; vertical-align: super; }
+  #verse .vref { margin-top: .5em; font-size: .52em; color: var(--v-ref); font-weight: 700; letter-spacing: .02em; }
+  #verse.lower .box { left: 110px; right: 110px; bottom: 56px; padding: 34px 56px; border-radius: 20px; }
+  #verse.center .box { left: 190px; right: 190px; top: 50%; transform: translateY(-50%); padding: 50px 70px; border-radius: 24px; }
+  #verse.side .box { right: 0; top: 0; bottom: 0; width: 740px; padding: 70px 56px; display: flex; align-items: center; }
+  #verse.side .in { flex-direction: column; }
+  #verse.full .box { inset: 0; padding: 90px 150px; background-image: linear-gradient(var(--v-tintfull), var(--v-tintfull)), var(--v-img); display: flex; align-items: center; text-align: center; }
+  #verse.full .in { width: 100%; }
+
+  /* ---------- Paroles ---------- */
+  #lyrics .box { position: absolute; left: 90px; right: 90px; text-align: center; color: var(--l-color); font-family: var(--font);
+    font-weight: var(--l-weight); line-height: 1.22; paint-order: stroke fill; -webkit-text-stroke: .11em var(--l-outline);
+    text-shadow: 0 .05em .18em rgba(0,0,0,.55); box-sizing: border-box; }
+  #lyrics.bottom .box { bottom: 60px; }
+  #lyrics.center .box { top: 50%; transform: translateY(-50%); }
+  #lyrics.upper .box { text-transform: uppercase; }
+
+  /* ---------- Guide caméra ---------- */
+  #guide { position: absolute; border: 6px dashed #00e676; background: rgba(0,230,118,.12); color: #00e676; font: 700 34px Arial; display: none;
+    align-items: center; justify-content: center; text-align: center; transition: all .4s ease; box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bgl"><video muted loop autoplay playsinline></video><img alt=""><div class="dim"></div></div>
+  <div id="media" class="layer"><div class="panel"></div><img class="img" alt=""></div>
+  <div id="verse" class="layer lower"><div class="box"><div class="in"></div></div></div>
+  <div id="lyrics" class="layer bottom"><div class="box"></div></div>
+  <div id="guide">ZONE CAMÉRA</div>
+</div>
+<script>
+const q = new URLSearchParams(location.search);
+const MONITOR = q.get('monitor') === '1';   // moniteur prédicateur : verset en plein écran uniquement
+const SCREEN = q.get('screen') === '1';     // écran auxiliaire : fond vidéo/image opaque
+const only = MONITOR ? 'verse' : (q.get('layer') || 'all');
+document.body.classList.add('bg-' + (q.get('bg') || (SCREEN || MONITOR ? 'black' : 'transparent')));
+
+const stage = document.getElementById('stage');
+function rescale() {
+  const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+  stage.style.transform = 'scale(' + s + ')';
+  stage.style.left = (innerWidth - 1920 * s) / 2 + 'px';
+  stage.style.top = (innerHeight - 1080 * s) / 2 + 'px';
+}
+addEventListener('resize', rescale); rescale();
+
+// rectangles [x, y, w, h] dans un canevas 1920x1080 ; "cam" = zone libre pour la caméra
+function mediaRects(layout, M) {
+  const cw = Math.max(200, Math.min(1000, +M.camWidth || 640)), sc = Math.max(0.3, Math.min(1, (+M.imgScale || 100) / 100)), ps = Math.max(200, Math.min(1100, +M.pipSize || 560));
+  const fitIn = (x, y, w, h) => {
+    let iw = w, ih = w * 9 / 16; if (ih > h) { ih = h; iw = h * 16 / 9; }
+    iw *= sc; ih *= sc; return [x + (w - iw) / 2, y + (h - ih) / 2, iw, ih];
+  };
+  const ph = ps * 9 / 16, pw = 1920 - cw;
+  switch (layout) {
+    case 'split-r': return { panel: [cw, 0, pw, 1080], img: fitIn(cw, 0, pw, 1080), cam: [0, 0, cw, 1080] };
+    case 'split-l': return { panel: [0, 0, pw, 1080], img: fitIn(0, 0, pw, 1080), cam: [pw, 0, cw, 1080] };
+    case 'pip-br': return { img: [1920 - ps - 60, 1080 - ph - 60, ps, ph], cam: [0, 0, 1920, 1080] };
+    case 'pip-bl': return { img: [60, 1080 - ph - 60, ps, ph], cam: [0, 0, 1920, 1080] };
+    case 'pip-tr': return { img: [1920 - ps - 60, 60, ps, ph], cam: [0, 0, 1920, 1080] };
+    case 'pip-tl': return { img: [60, 60, ps, ph], cam: [0, 0, 1920, 1080] };
+    default: return { panel: [0, 0, 1920, 1080], img: [0, 0, 1920, 1080], cam: null };
+  }
+}
+const VERSE_CAM = { side: [0, 0, 1180, 1080] };
+
+const place = (el, r) => { if (!r) { el.style.opacity = 0; return; } el.style.opacity = 1; el.style.left = r[0] + 'px'; el.style.top = r[1] + 'px'; el.style.width = r[2] + 'px'; el.style.height = r[3] + 'px'; };
+const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const hexA = (hex, a) => { const n = parseInt(String(hex).slice(1), 16) || 0; return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; };
+const cssUrl = u => u ? 'url("' + String(u).replace(/"/g, '%22') + '")' : 'none';
+
+function fit(box, inner, startPx, availH, minPx = 26) {
+  let s = startPx; box.style.fontSize = s + 'px';
+  while (inner.offsetHeight > availH && s > minPx) { s -= 2; box.style.fontSize = s + 'px'; }
+}
+
+let last = {};
+const changed = (k, v) => { const j = JSON.stringify(v); if (last[k] === j) return false; last[k] = j; return true; };
+
+function render(S) {
+  const root = document.documentElement.style, T = S.theme;
+  root.setProperty('--font', T.font);
+  const VT = MONITOR ? T.monitor : T.verse;
+  root.setProperty('--v-color', VT.color); root.setProperty('--v-ref', VT.refColor);
+  const hasImg = !!VT.bgImage;
+  root.setProperty('--v-img', cssUrl(VT.bgImage));
+  root.setProperty('--v-tint', hexA(VT.bg, T.verse.bgAlpha));
+  root.setProperty('--v-tintfull', hexA(VT.bg, hasImg ? (MONITOR ? 0.5 : Math.min(T.verse.bgAlpha, 0.7)) : 1));
+  root.setProperty('--l-color', T.lyrics.color); root.setProperty('--l-outline', T.lyrics.outline); root.setProperty('--l-weight', T.lyrics.weight);
+  root.setProperty('--m-panel', T.media.panel); root.setProperty('--m-img', cssUrl(T.media.bgImage));
+
+  const show = k => only === 'all' || only === k;
+  let cam = null;
+
+  // --- fond (écran auxiliaire uniquement)
+  const bgl = document.getElementById('bgl');
+  if (SCREEN) {
+    bgl.style.display = 'block';
+    const B = S.background || {}, vid = bgl.querySelector('video'), im = bgl.querySelector('img');
+    bgl.querySelector('.dim').style.opacity = B.dim == null ? 0.35 : B.dim;
+    if (B.src && B.type === 'video') {
+      im.style.display = 'none'; vid.style.display = 'block';
+      if (vid.getAttribute('src') !== B.src) vid.src = B.src;
+      vid.play().catch(() => {});
+    } else if (B.src) {
+      vid.style.display = 'none'; vid.removeAttribute('src'); vid.load(); im.style.display = 'block';
+      if (im.getAttribute('src') !== B.src) im.src = B.src;
+    } else { vid.style.display = 'none'; im.style.display = 'none'; if (vid.getAttribute('src')) { vid.removeAttribute('src'); vid.load(); } }
+  }
+
+  // --- médias
+  const M = S.live.media, mEl = document.getElementById('media');
+  mEl.classList.toggle('on', show('media') && M.on);
+  if (M.on && show('media')) {
+    const lay = mediaRects(M.layout, T.media);
+    mEl.classList.toggle('pip', M.layout.startsWith('pip'));
+    const img = mEl.querySelector('.img');
+    if (img.getAttribute('src') !== M.src) img.src = M.src;
+    place(mEl.querySelector('.panel'), lay.panel); place(img, lay.img);
+    cam = lay.cam;
+  }
+
+  // --- versets
+  const V = S.live.verse, vEl = document.getElementById('verse');
+  const vLayout = MONITOR ? 'full' : V.layout;
+  vEl.classList.toggle('on', show('verse') && V.on);
+  if (V.on && show('verse')) {
+    vEl.className = 'layer on ' + vLayout;
+    if (!MONITOR && VERSE_CAM[V.layout]) cam = VERSE_CAM[V.layout];
+    if (changed('verse', [V, VT.size, vLayout, T.font])) {
+      const box = vEl.querySelector('.box'), inner = vEl.querySelector('.in');
+      inner.innerHTML = V.versions.map(ver => {
+        const multi = ver.texts.length > 1;
+        const txt = ver.texts.map(t => (multi ? '<sup>' + t.v + '</sup>' : '') + esc(t.text)).join(' ');
+        return '<div class="vb"><div class="vtxt">' + txt + '</div><div class="vref">' + esc(V.ref) + ' — ' + esc(ver.abbr) + '</div></div>';
+      }).join('');
+      const avail = { lower: 400, center: 640, side: 900, full: 860 }[vLayout] || 400;
+      fit(box, inner, VT.size, avail);
+    }
+  } else vEl.className = 'layer ' + vLayout;
+
+  // --- paroles
+  const L = S.live.lyrics, lEl = document.getElementById('lyrics');
+  lEl.classList.toggle('on', show('lyrics') && L.on);
+  if (L.on && show('lyrics')) {
+    lEl.className = 'layer on ' + L.layout + (T.lyrics.upper ? ' upper' : '');
+    if (changed('lyrics', [L, T.lyrics, T.font])) {
+      const box = lEl.querySelector('.box');
+      box.innerHTML = '<div class="in">' + L.lines.map(esc).join('<br>') + '</div>';
+      fit(box, box.firstChild, T.lyrics.size, L.layout === 'center' ? 820 : 420, 30);
+    }
+  } else lEl.className = 'layer ' + L.layout;
+
+  // --- guide caméra (pour régler OBS / vMix)
+  const g = document.getElementById('guide');
+  if (S.guide && cam && !MONITOR) { g.style.display = 'flex'; place(g, cam); g.style.opacity = 1; } else g.style.display = 'none';
+}
+
+// ---- polices : recharger quand la liste ou la police change, puis re-mesurer ----
+let state, fontsKey = null, fontReady = {};
+function rerender() { last = {}; if (state) render(state); }
+function ensureFont(S) {
+  const f = S.theme.font; if (fontReady[f]) return; fontReady[f] = true;
+  const fam = f.split(',')[0].trim();
+  document.fonts.load('40px ' + fam).then(rerender, rerender);
+}
+function onState(S) {
+  state = S;
+  const k = JSON.stringify(S.fonts);
+  if (fontsKey !== null && k !== fontsKey) {
+    const l = document.getElementById('fontcss');
+    l.onload = () => { fontReady = {}; ensureFont(state); rerender(); };
+    l.href = '/fonts.css?v=' + Date.now();
+  }
+  fontsKey = k;
+  render(S); ensureFont(S);
+}
+
+let ws;
+function connect() {
+  ws = new WebSocket('ws://' + location.host);
+  ws.onmessage = e => { const m = JSON.parse(e.data); if (m.type === 'state') onState(m.state); };
+  ws.onclose = () => setTimeout(connect, 1000);
+}
+connect();
+</script>
+</body>
+</html>
