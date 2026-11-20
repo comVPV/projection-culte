@@ -152,12 +152,12 @@
       </div>
       <div id="songedit" style="display:none">
         <div class="row"><input id="etitle" placeholder="Titre du chant"></div>
+        <div class="row" style="position:sticky;top:0;z-index:5;background:var(--bg,#14181f);padding:6px 0"><button class="primary" id="esave">Enregistrer</button><button id="ecancel">Annuler</button><button class="danger" id="edel">Supprimer</button></div>
         <div class="row"><label class="hint">Lignes par diapo : <select id="eper" style="width:auto;display:inline-block"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label>
           <label class="hint"><input type="checkbox" id="eauto" checked style="width:auto"> Découpage automatique</label></div>
         <div class="hint">Colle tes paroles telles quelles : elles sont découpées toutes seules. Une ligne vide force un changement de diapo. Une ligne « Refrain », « Couplet 1 »… devient une étiquette.</div>
         <textarea id="etext" placeholder="Couplet 1&#10;Ligne 1&#10;Ligne 2&#10;Ligne 3&#10;Ligne 4&#10;&#10;Refrain&#10;…"></textarea>
         <div class="lbl" id="eprev-t"></div><div id="eprev"></div>
-        <div class="row"><button class="primary" id="esave">Enregistrer</button><button id="ecancel">Annuler</button><button class="danger" id="edel">Supprimer</button></div>
       </div>
     </div>
 
@@ -209,6 +209,7 @@
 
       <details open><summary>Préférences de la régie</summary>
         <div class="row"><label><input type="checkbox" id="p-auto"> Masquer automatiquement quand je change d'onglet (Verset / Chants / Images)</label></div>
+        <div class="row"><label>Le bandeau se retire tout seul après <input type="number" id="p-lsecs" min="0" max="600" style="width:70px;display:inline-block"> secondes (0 = jamais, il part alors quand on change de section)</label></div>
         <div class="row"><label><input type="checkbox" id="p-direct"> Projection directe : un clic sur un verset l'affiche tout de suite</label></div>
         <div class="row"><label><input type="checkbox" id="guide"> Guide « zone caméra » (pour caler OBS / vMix)</label></div>
       </details>
@@ -589,7 +590,7 @@ $('#spptxf').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   try {
     const j = await api('/api/songs/import-pptx', { method: 'POST', body: f });
-    editSong(null); $('#etitle').value = f.name.replace(/\.pptx$/i, ''); $('#etext').value = j.sections.join('\n\n'); songPreview();
+    editSong(null); $('#etitle').value = j.title || f.name.replace(/\.pptx$/i, ''); $('#etext').value = j.sections.join('\n\n'); songPreview();
     toast('Texte importé et découpé : vérifie l\'aperçu puis enregistre');
   } catch (err) { toast(err.message); }
   e.target.value = '';
@@ -679,6 +680,13 @@ $('#mcard').onclick = () => {
 // =====================================================================
 //                               BANDEAUX
 // =====================================================================
+let lowerDeadline = 0;
+function tickLower() {
+  const b = $('#lthide'); if (!b) return;
+  const left = lowerDeadline ? Math.max(0, Math.ceil((lowerDeadline - Date.now()) / 1000)) : 0;
+  b.textContent = 'Masquer le bandeau' + (left ? ' (' + left + ' s)' : '');
+}
+setInterval(tickLower, 500);
 const lwShow = (title, sub) => send('lower.show', { title, sub });
 $('#lwgo').onclick = () => lwShow($('#lwt').value, $('#lws').value);
 $('#lwhide').onclick = () => send('lower.hide');
@@ -735,7 +743,7 @@ $('#planlist').onclick = e => {
   const act = t.dataset.act, id = t.dataset.id, sec = t.dataset.sec, sc = sec && S.plan.sections.find(x => x.id === sec);
   e.stopPropagation();
   if (act === 'target') send('plan.target', { sec });
-  else if (act === 'lower') send('lower.show', { title: sc.title, sub: '' });
+  else if (act === 'lower') send('lower.show', { title: sc.title, sub: '', sec });
   else if (act === 'add') { send('plan.target', { sec }); itemModal(sec); }
   else if (act === 'go') send('plan.go', { id });
   else if (act === 'edit') { const f = findPlanItem(id); itemModal(f.sec.id, f.it); }
@@ -823,9 +831,9 @@ const BUILTIN_FONTS = [['"Segoe UI", Roboto, Helvetica, Arial, sans-serif', 'Seg
   ['"Trebuchet MS", sans-serif', 'Trebuchet'], ['"Palatino Linotype", Palatino, serif', 'Palatino'], ['"Times New Roman", serif', 'Times'], ['Impact, sans-serif', 'Impact']];
 const THEME_FIELDS = {
   verse: [['size', 'Taille max (px)', 'num', 2], ['color', 'Couleur du texte', 'color'], ['bg', 'Couleur du fond', 'color'], ['bgAlpha', 'Opacité du fond / de la teinte (0-1)', 'num', 0.05], ['refColor', 'Couleur de la référence', 'color'], ['refSize', 'Taille de la référence (% du texte)', 'num', 2]],
-  lyrics: [['size', 'Taille max (px)', 'num', 2], ['weight', 'Graisse (400-900)', 'num', 100], ['color', 'Couleur du texte', 'color'], ['outline', 'Couleur du contour', 'color'], ['upper', 'Majuscules', 'bool']],
+  lyrics: [['size', 'Taille max (px)', 'num', 2], ['weight', 'Graisse (400-900)', 'num', 100], ['color', 'Couleur du texte', 'color'], ['outline', 'Couleur du contour', 'color'], ['outlineW', 'Épaisseur du contour (0 = aucun, 11 = normal, 30 = très épais)', 'num', 1], ['upper', 'Majuscules', 'bool']],
   monitor: [['size', 'Taille max (px)', 'num', 2], ['color', 'Couleur du texte', 'color'], ['bg', 'Couleur du fond', 'color'], ['refColor', 'Couleur de la référence', 'color'], ['refSize', 'Taille de la référence (% du texte)', 'num', 2],
-    ['chronoSize', 'Taille du chrono (px)', 'num', 4], ['chronoColor', 'Couleur du chrono', 'color'], ['chronoPos', 'Position du chrono', 'select', [['tr', 'Haut droite'], ['tl', 'Haut gauche'], ['br', 'Bas droite'], ['bl', 'Bas gauche']]]],
+    ['chronoSize', 'Taille du chrono (px)', 'num', 4], ['chronoColor', 'Couleur du chrono', 'color'], ['chronoBg', 'Fond du chrono', 'color'], ['chronoBgAlpha', 'Opacité du fond du chrono (0-1)', 'num', 0.05], ['chronoPos', 'Position du chrono', 'select', [['bc', 'Bas centre'], ['br', 'Bas droite'], ['bl', 'Bas gauche'], ['tc', 'Haut centre'], ['tr', 'Haut droite'], ['tl', 'Haut gauche']]]],
   lower: [['size', 'Taille du titre (px)', 'num', 2], ['color', 'Couleur du texte', 'color'], ['bg', 'Couleur du fond', 'color'], ['bgAlpha', 'Opacité du fond (0-1)', 'num', 0.05], ['accent', 'Couleur du liseré', 'color'], ['pos', 'Position', 'select', [['left', 'Gauche'], ['center', 'Centre'], ['right', 'Droite']]]],
   media: [['panel', 'Fond des panneaux (sans image)', 'color'], ['camWidth', 'Largeur zone prédicateur (px)', 'num', 20], ['imgScale', 'Taille de l\'image (%)', 'num', 5], ['pipSize', 'Largeur petite image (px)', 'num', 20]],
 };
@@ -896,6 +904,7 @@ function syncTheme() {
 $('#threset').onclick = () => { if (confirm('Remettre toute l\'apparence par défaut ?')) send('theme.reset'); };
 $('#guide').onchange = e => send('guide.set', { on: e.target.checked });
 $('#p-auto').onchange = e => send('prefs.set', { key: 'autoHide', value: e.target.checked });
+$('#p-lsecs').onchange = e => send('prefs.set', { key: 'lowerSecs', value: e.target.value });
 $('#p-direct').onchange = e => send('prefs.set', { key: 'directClick', value: e.target.checked });
 $('#pvsel').onchange = e => { $('#pv').src = e.target.value; };
 
@@ -984,6 +993,7 @@ function renderState() {
   const lc = (id, on, txt) => { const e = $('#' + id); e.classList.toggle('on', on); e.textContent = on ? '● EN DIRECT' + (txt ? ' : ' + txt : '') : 'Hors antenne'; };
   lc('lc-verse', L.verse.on, L.verse.ref); lc('lc-lyrics', L.lyrics.on, L.lyrics.title); lc('lc-media', L.media.on, L.media.name); lc('lc-lower', L.lower.on, L.lower.title);
   $('#lthide').style.display = L.lower.on ? '' : 'none';
+  lowerDeadline = L.lower.on && L.lower.until ? Date.now() + (L.lower.until - S.chrono.now) : 0; tickLower();
   const vd = L.media.on && L.media.kind === 'video', V = L.media.video;
   $('#vidctl').style.display = vd ? '' : 'none';
   if (vd) { $('#vplay').textContent = V.playing ? '⏸ Pause' : '▶ Lecture'; $('#vloop').textContent = '🔁 Boucle : ' + (V.loop ? 'oui' : 'non'); $('#vmute').textContent = V.muted ? '🔇 Son : coupé' : '🔊 Son : oui'; }
@@ -991,7 +1001,7 @@ function renderState() {
   document.querySelectorAll('#vlay button').forEach(b => b.classList.toggle('on', b.dataset.v === L.verse.layout));
   document.querySelectorAll('#llay button').forEach(b => b.classList.toggle('on', b.dataset.v === L.lyrics.layout));
   document.querySelectorAll('#mlay button').forEach(b => b.classList.toggle('on', b.dataset.v === L.media.layout));
-  $('#guide').checked = S.guide; $('#p-auto').checked = S.prefs.autoHide; $('#p-direct').checked = S.prefs.directClick;
+  if (document.activeElement !== $('#p-lsecs')) $('#p-lsecs').value = S.prefs.lowerSecs; $('#guide').checked = S.guide; $('#p-auto').checked = S.prefs.autoHide; $('#p-direct').checked = S.prefs.directClick;
   if (document.activeElement !== $('#bgdim')) $('#bgdim').value = Math.round((S.background.dim || 0) * 100);
   renderPlan(); renderLowers(); renderUpdate(); renderBackup(); renderSong(); markMedia(); syncTheme(); markVerses(false);
   if (!document.querySelector('#vers input') && bibles.length) renderBibles();

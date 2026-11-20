@@ -1,4 +1,4 @@
-# Projection du culte — version 0.4
+# Projection du culte — version 0.5
 
 Verset, paroles de chants, images/annonces et déroulé du culte, en calques
 transparents pour OBS et vMix. Fonctionne sous Windows et Mac.
@@ -55,7 +55,7 @@ dans OBS ou vMix (rectangle vert pointillé), puis décoche-le.
 - La sortie OBS / vMix normale (transparente) n'affiche jamais ce fond.
 
 ## Bibles
-- Fournie : King James (KJV).
+- Fournies : Louis Segond 1910 (LSG) et King James (KJV), sélectionnées par défaut (domaine public).
 - Ajouter Louis Segond 1910, Darby, etc. : Réglages > Importer une Bible
   (fichier JSON ou XML Zefania ; un livre manquant est toléré et signalé). Choisis un identifiant (ex. `lsg`), un nom, une abréviation.
 - Référence : `Jn 3:16`, `1 Co 13:4-7`, `Ps 23`. Cocher plusieurs versions = affichage côte à côte.
@@ -84,7 +84,7 @@ Chaque section reçoit des chants, versets, images/vidéos, annonces, bandeaux o
 ## Bandeaux (lower thirds)
 Onglet **Bandeaux** : titre + sous-titre (ex. nom d'un intervenant), **▶ Afficher** à tout moment, par-dessus le reste.
 Jamais affiché sur le moniteur du prédicateur. Ma liste garde les bandeaux fréquents ; un clic sur le nom d'une section
-affiche cette section en bandeau. Adresse « Bandeaux seuls » disponible pour un calque séparé.
+affiche cette section en bandeau. Le bandeau se retire seul après 30 s (réglable dans Réglages, 0 = jamais) et dès qu'on change de section.
 
 ## Vidéos
 Onglet Images / annonces : un clic sur une vidéo l'affiche (mêmes dispositions que les images), avec Pause, Début, Boucle et Son.

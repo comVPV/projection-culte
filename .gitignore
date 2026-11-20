@@ -7,6 +7,7 @@ data/media/*
 data/fonts/
 data/bibles/*
 !data/bibles/kjv.json
+!data/bibles/lsg1910.json
 
 # fichiers locaux
 data/plans.json

@@ -34,9 +34,9 @@ const uid = () => Date.now().toString(36) + (uidN++).toString(36) + Math.random(
 const DEFAULT_THEME = {
   font: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   verse: { size: 58, color: '#ffffff', bg: '#101820', bgAlpha: 0.85, refColor: '#f5c542', refSize: 52, bgImage: '' },
-  lyrics: { size: 78, color: '#ffffff', outline: '#000000', weight: 700, upper: false },
+  lyrics: { size: 78, color: '#ffffff', outline: '#000000', outlineW: 11, weight: 700, upper: false },
   media: { panel: '#101820', bgImage: '', camWidth: 640, imgScale: 100, pipSize: 560 },
-  monitor: { size: 96, color: '#ffffff', bg: '#000000', refColor: '#f5c542', refSize: 52, bgImage: '', chronoSize: 64, chronoColor: '#ffffff', chronoPos: 'tr' },
+  monitor: { size: 96, color: '#ffffff', bg: '#000000', refColor: '#f5c542', refSize: 52, bgImage: '', chronoSize: 90, chronoColor: '#ffffff', chronoBg: '#101820', chronoBgAlpha: 0.88, chronoPos: 'bc' },
   lower: { size: 44, color: '#ffffff', bg: '#101820', bgAlpha: 0.88, accent: '#f5c542', pos: 'left' },
 };
 const DEFAULT_SECTIONS = ['Bienvenue', 'Intercession', 'Louange', 'Annonces', 'Adoration', 'Enseignement', 'Réponse à la Parole', 'Sainte Cène', 'Offrandes', 'Accueil des nouveaux', 'Annonces pastorales', 'Résumé du culte', 'Bénédiction finale'];
@@ -55,6 +55,14 @@ function normPlan(p) {
   return pl;
 }
 const saved = readJSON(STATE_FILE, {});
+// Bibles fournies avec l'appli (KJV, Louis Segond 1910) : copiées dans data/bibles si absentes
+(function seedBibles() {
+  const src = path.join(__dirname, 'defaults', 'bibles'), dst = path.join(__dirname, 'data', 'bibles');
+  try {
+    fs.mkdirSync(dst, { recursive: true });
+    for (const f of fs.readdirSync(src)) if (f.endsWith('.json') && !fs.existsSync(path.join(dst, f))) fs.copyFileSync(path.join(src, f), path.join(dst, f));
+  } catch (e) { console.error('Bibles par défaut :', e.message); }
+})();
 function mergeTheme(st = {}) {
   const t = { font: st.font || (st.verse && st.verse.font) || DEFAULT_THEME.font };
   for (const g of ['verse', 'lyrics', 'media', 'monitor', 'lower']) { t[g] = { ...DEFAULT_THEME[g], ...(st[g] || {}) }; delete t[g].font; }
@@ -65,10 +73,10 @@ const state = {
     verse: { on: false, layout: 'lower' },
     lyrics: { on: false, layout: 'bottom' },
     media: { on: false, layout: 'full', kind: 'image', src: '', name: '', card: null, video: { playing: true, loop: false, muted: false, rev: 0 } },
-    lower: { on: false, title: '', sub: '' },
+    lower: { on: false, title: '', sub: '', sec: '', until: 0 },
   },
   theme: mergeTheme(saved.theme),
-  prefs: { versions: ['kjv'], autoHide: true, directClick: false, backupDir: '', ...(saved.prefs || {}) },
+  prefs: { versions: ['lsg1910', 'kjv'], autoHide: true, directClick: false, backupDir: '', lowerSecs: 30, ...(saved.prefs || {}) },
   plan: normPlan(saved.plan),
   lowers: Array.isArray(saved.lowers) ? saved.lowers : [],
   chrono: { running: false, base: 0, startedAt: 0, visible: true, now: 0 },
@@ -88,10 +96,17 @@ const FONT_EXT = /\.(ttf|otf|woff2?)$/i;
 function refreshFonts() { state.fonts = fs.readdirSync(FONTS).filter(f => FONT_EXT.test(f)).map(f => f.replace(FONT_EXT, '')).sort((a, b) => a.localeCompare(b)); }
 refreshFonts();
 
+// Migration v0.5 : nouveau chrono (bas centre, plus grand, avec fond) et Bibles par défaut
+const MIG = 5;
+if ((saved.mig || 0) < MIG) {
+  state.theme.monitor.chronoPos = 'bc'; state.theme.monitor.chronoSize = Math.max(90, +state.theme.monitor.chronoSize || 0);
+  const v = state.prefs.versions;
+  if (!Array.isArray(v) || !v.length || (v.length === 1 && v[0] === 'kjv')) state.prefs.versions = ['lsg1910', 'kjv'];
+}
 let saveTimer = null;
 function persist() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => writeJSON(STATE_FILE, { theme: state.theme, prefs: state.prefs, plan: { ...state.plan, cursor: null }, lowers: state.lowers, background: state.background }), 400);
+  saveTimer = setTimeout(() => writeJSON(STATE_FILE, { mig: MIG, theme: state.theme, prefs: state.prefs, plan: { ...state.plan, cursor: null }, lowers: state.lowers, background: state.background }), 400);
 }
 
 const loadSongs = () => readJSON(SONGS_FILE, []);
@@ -144,8 +159,18 @@ function showMedia(a) {
   };
 }
 
+let lowerTimer = null;
+function hideLower() { clearTimeout(lowerTimer); lowerTimer = null; state.live.lower = { on: false, title: '', sub: '', sec: '', until: 0 }; }
+// Affiche un bandeau, rattaché à une section : il disparaît quand on en sort, ou après lowerSecs secondes (0 = jamais)
+function showLower(title, sub, sec) {
+  clearTimeout(lowerTimer); lowerTimer = null;
+  const secs = Math.max(0, Math.min(600, +state.prefs.lowerSecs || 0));
+  const until = secs ? Date.now() + secs * 1000 : 0;
+  state.live.lower = { on: true, title, sub: sub || '', sec: sec || state.plan.target || '', until };
+  if (secs) lowerTimer = setTimeout(() => { lowerTimer = null; if (state.live.lower.on && state.live.lower.until === until) { hideLower(); broadcast(); } }, secs * 1000 + 50);
+}
 function hideAll() {
-  state.live.verse.on = false; state.live.lyrics.on = false; state.live.media.on = false; state.live.lower.on = false;
+  state.live.verse.on = false; state.live.lyrics.on = false; state.live.media.on = false; hideLower();
 }
 
 function findItem(id) {
@@ -170,7 +195,9 @@ function goPlan(id, startAt) {
   const f = findItem(id);
   if (!f) return;
   const it = f.it;
+  const keep = state.live.lower.on && state.live.lower.sec === f.s.id ? { ...state.live.lower } : null;
   hideAll();
+  if (keep) state.live.lower = keep;
   state.plan.cursor = id; state.plan.target = f.s.id;
   if (it.type === 'song') {
     const s = loadSongs().find(x => x.id === it.songId);
@@ -183,7 +210,7 @@ function goPlan(id, startAt) {
     if (it.mode === 'card') showMedia({ kind: 'card', card: it.card, name: it.label, layout: it.layout });
     else showMedia({ src: it.src, name: it.label, layout: it.layout });
   } else if (it.type === 'lower') {
-    state.live.lower = { on: true, title: it.title, sub: it.sub || '' };
+    showLower(it.title, it.sub || '', f.s.id);
   }
 }
 
@@ -232,10 +259,10 @@ function handle(cmd, a) {
     case 'lower.show': {
       const title = String(a.title || '').trim().slice(0, 120);
       if (!title) throw new Error('Écris au moins un titre pour le bandeau');
-      L.lower = { on: true, title, sub: String(a.sub || '').trim().slice(0, 160) };
+      showLower(title, String(a.sub || '').trim().slice(0, 160), state.plan.sections.some(x => x.id === a.sec) ? a.sec : '');
       break;
     }
-    case 'lower.hide': L.lower.on = false; break;
+    case 'lower.hide': hideLower(); break;
     case 'lowers.add': {
       const title = String(a.title || '').trim().slice(0, 120); if (!title) throw new Error('Écris au moins un titre');
       const sub = String(a.sub || '').trim().slice(0, 160);
@@ -263,6 +290,7 @@ function handle(cmd, a) {
     case 'theme.reset': state.theme = mergeTheme(); break;
     case 'prefs.set':
       if (['autoHide', 'directClick'].includes(a.key)) state.prefs[a.key] = !!a.value;
+      if (a.key === 'lowerSecs') state.prefs.lowerSecs = Math.max(0, Math.min(600, parseInt(a.value, 10) || 0));
       if (a.key === 'backupDir') { state.prefs.backupDir = String(a.value || '').trim().slice(0, 500); syncBackup(); }
       break;
     case 'step': step(a.dir > 0 ? 1 : -1); break;
@@ -297,7 +325,7 @@ function handle(cmd, a) {
       break;
     }
     case 'plan.go': goPlan(a.id); break;
-    case 'plan.target': if (state.plan.sections.some(s => s.id === a.sec)) state.plan.target = a.sec; break;
+    case 'plan.target': if (state.plan.sections.some(s => s.id === a.sec)) { state.plan.target = a.sec; if (state.live.lower.on && state.live.lower.sec !== a.sec) hideLower(); } break;
     case 'plan.name': state.plan.name = String(a.name || 'Culte').slice(0, 80); break;
     case 'plan.section.add': {
       const sec = { id: uid(), title: String(a.title || 'Nouvelle section').slice(0, 60), items: [] };
@@ -523,19 +551,36 @@ async function pptxToSong(buf) {
   const slides = Object.keys(zip.files).filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n))
     .sort((a, b) => parseInt(a.match(/(\d+)\.xml/)[1]) - parseInt(b.match(/(\d+)\.xml/)[1]));
   const dec = s => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
-  const sections = [];
+  const paraText = pm => { let line = ''; for (const m of pm.matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>|<a:br\s*\/>/g)) line += m[1] === undefined ? '\n' : dec(m[1]); return line.replace(/\s+$/g, ''); };
+  const key = t => t.toLowerCase().replace(/\s+/g, ' ').trim();
+  const pages = [];   // { paras: [{t, title}] }
   for (const n of slides) {
     const xml = await zip.file(n).async('string');
     const paras = [];
-    for (const pm of xml.matchAll(/<a:p[ >][\s\S]*?<\/a:p>/g)) {
-      let line = '';
-      for (const m of pm[0].matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>|<a:br\s*\/>/g)) line += m[1] === undefined ? '\n' : dec(m[1]);
-      line = line.replace(/\s+$/g, '');
-      if (line.trim()) paras.push(line);
+    const shapes = xml.match(/<p:sp[ >][\s\S]*?<\/p:sp>/g) || [xml];
+    for (const sh of shapes) {
+      if (/<p:ph[^>]*type="(sldNum|ftr|dt)"/.test(sh)) continue;   // numéro, pied de page, date
+      const isTitle = /<p:ph[^>]*type="(title|ctrTitle)"/.test(sh);
+      for (const pm of sh.matchAll(/<a:p[ >][\s\S]*?<\/a:p>/g)) { const t = paraText(pm[0]); if (t.trim()) paras.push({ t, title: isTitle }); }
     }
-    if (paras.length) sections.push(paras.join('\n'));
+    pages.push(paras);
   }
-  return sections;
+  // Titre : pris une seule fois (zone « titre » du PowerPoint, sinon première ligne répétée sur la plupart des diapos)
+  let title = '', tkey = '';
+  const count = {};
+  const tit = pages.flatMap(ps => ps.filter(x => x.title).map(x => x.t.replace(/\s*\n\s*/g, ' ')));
+  if (tit.length) { tit.forEach(t => { count[key(t)] = (count[key(t)] || 0) + 1; }); tkey = Object.keys(count).sort((a, b) => count[b] - count[a])[0]; title = tit.find(t => key(t) === tkey); }
+  else if (pages.length >= 3) {
+    for (const ps of pages) if (ps[0]) { const k = key(ps[0].t); count[k] = (count[k] || 0) + 1; }
+    const best = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
+    if (best && count[best] >= Math.ceil(pages.length * 0.6)) { tkey = best; title = pages.find(ps => ps[0] && key(ps[0].t) === best)[0].t; }
+  }
+  const sections = [];
+  for (const ps of pages) {
+    const lines = ps.filter(x => !(tkey && key(x.t.replace(/\s*\n\s*/g, ' ')) === tkey)).map(x => x.t);
+    if (lines.length) sections.push(lines.join('\n'));
+  }
+  return { title: title.trim(), sections };
 }
 
 const server = http.createServer(async (req, res) => {
@@ -597,9 +642,9 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: true });
       }
       if (p === '/api/songs/import-pptx' && req.method === 'POST') {
-        const sections = await pptxToSong(await readBody(req));
+        const { title, sections } = await pptxToSong(await readBody(req));
         if (!sections.length) return send(res, 400, { error: 'Aucun texte trouvé dans ce PowerPoint' });
-        return send(res, 200, { sections });
+        return send(res, 200, { title, sections });
       }
       if (p === '/api/media' && req.method === 'GET') {
         const files = fs.readdirSync(MEDIA).filter(f => MIME[path.extname(f).toLowerCase()])
