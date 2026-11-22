@@ -120,7 +120,8 @@ function showVerse(a) {
   if (!p) throw new Error('Référence introuvable : « ' + (a.ref || '') + ' »');
   const versions = ids.map(id => bible.getPassage(id, p)).filter(Boolean);
   if (!versions.length) throw new Error('Passage introuvable dans la version choisie');
-  const layout = a.layout || state.live.verse.layout;
+  let layout = a.layout || state.live.verse.layout;
+  if (state.live.lower.on && (layout === 'lower' || layout === 'center')) layout = 'side';   // bandeau à l'écran : le verset passe à droite
   state.live.verse = { on: true, layout, ref: bible.refLabel(p, versions[0].lang), versions, p, ids };
 }
 
@@ -167,6 +168,8 @@ function showLower(title, sub, sec) {
   const secs = Math.max(0, Math.min(600, +state.prefs.lowerSecs || 0));
   const until = secs ? Date.now() + secs * 1000 : 0;
   state.live.lower = { on: true, title, sub: sub || '', sec: sec || state.plan.target || '', until };
+  // un verset est à l'écran : il passe en panneau à droite pour laisser la place au bandeau (à gauche)
+  if (state.live.verse.on && state.live.verse.layout !== 'side') state.live.verse.layout = 'side';
   if (secs) lowerTimer = setTimeout(() => { lowerTimer = null; if (state.live.lower.on && state.live.lower.until === until) { hideLower(); broadcast(); } }, secs * 1000 + 50);
 }
 function hideAll() {

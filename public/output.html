@@ -38,6 +38,7 @@
   #lower.pos-left .lt { left: 90px; }
   #lower.pos-center .lt { left: 50%; transform: translateX(-50%); border: 0; border-bottom: 8px solid var(--lt-accent); border-radius: 14px; text-align: center; }
   #lower.pos-right .lt { right: 90px; border-left: 0; border-right: 10px solid var(--lt-accent); border-radius: 14px 0 0 14px; text-align: right; }
+  #lower.beside .lt { left: 90px; right: auto; max-width: 1000px; transform: none; border: 0; border-left: 10px solid var(--lt-accent); border-radius: 0 14px 14px 0; text-align: left; }   /* verset en panneau à droite : bandeau à gauche */
   #lower .lt-t { font-size: var(--lt-size); font-weight: 700; line-height: 1.15; }
   #lower .lt-s { font-size: calc(var(--lt-size) * .62); margin-top: .2em; opacity: .92; line-height: 1.2; }
 
@@ -66,8 +67,9 @@
   #lyrics .box { position: absolute; left: 90px; right: 90px; text-align: center; color: var(--l-color); font-family: var(--font);
     font-weight: var(--l-weight); line-height: 1.22; paint-order: stroke fill; -webkit-text-stroke: var(--l-ow) var(--l-outline);
     text-shadow: 0 .05em .18em rgba(0,0,0,.55); box-sizing: border-box; }
-  #lyrics.bottom .box { bottom: 60px; }
-  #lyrics.center .box { top: 50%; transform: translateY(-50%); }
+  #lyrics .box { transition: bottom .3s ease, transform .3s ease; }
+  #lyrics.bottom .box { bottom: calc(60px + var(--lift, 0px)); }
+  #lyrics.center .box { top: 50%; transform: translateY(calc(-50% - var(--lift, 0px))); }
   #lyrics.upper .box { text-transform: uppercase; }
 
   /* ---------- Guide caméra ---------- */
@@ -245,7 +247,7 @@ function render(S) {
       box.innerHTML = '<div class="in">' + L.lines.map(esc).join('<br>') + '</div>';
       fit(box, box.firstChild, T.lyrics.size, L.layout === 'center' ? 820 : 420, 30);
     }
-  } else lEl.className = 'layer ' + L.layout;
+  } else lEl.className = 'layer ' + L.layout + (T.lyrics.upper ? ' upper' : '');   // garder « upper » : sinon le texte passe en minuscules pendant le fondu
 
   // --- bandeau (jamais sur le moniteur du prédicateur)
   const W = S.live.lower, wEl = document.getElementById('lower');
@@ -255,6 +257,15 @@ function render(S) {
     wEl.querySelector('.lt-t').textContent = W.title;
     const ls = wEl.querySelector('.lt-s'); ls.textContent = W.sub || ''; ls.style.display = W.sub ? '' : 'none';
   }
+  // verset en panneau à droite : le bandeau reste à gauche, sans passer sous le panneau
+  wEl.classList.toggle('beside', show('verse') && S.live.verse.on && !MONITOR && S.live.verse.layout === 'side');
+  // le bandeau ne recouvre jamais les paroles : elles remontent au-dessus de lui
+  let lift = 0;
+  if (show('lower') && W.on && show('lyrics') && L.on) {
+    const lowerTop = 1080 - 80 - wEl.querySelector('.lt').offsetHeight, bh = lEl.querySelector('.box').offsetHeight;
+    lift = Math.max(0, (L.layout === 'center' ? 540 + bh / 2 : 1020) - lowerTop + 30);
+  }
+  lEl.style.setProperty('--lift', lift + 'px');
 
   // --- chrono (moniteur uniquement)
   const ch = document.getElementById('chrono');

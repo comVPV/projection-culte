@@ -22,6 +22,8 @@
   textarea { min-height:260px; resize:vertical; font-family:inherit; }
   main { display:grid; grid-template-columns: minmax(340px, 1fr) minmax(340px, 560px); gap:16px; padding:16px; max-width:1500px; margin:0 auto; }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; } .right { order:-1; } }
+  /* colonne de droite (aperçu + boutons) : reste fixe quand on défile à gauche */
+  @media (min-width: 901px) { .right { position: sticky; top: 74px; align-self: start; max-height: calc(100vh - 90px); overflow-y: auto; } }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
   .tabs { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
   .tab { display:none; } .tab.on { display:block; }
@@ -127,12 +129,9 @@
     <!-- ================= CHANTS ================= -->
     <div class="tab" id="t-songs">
       <div id="songview">
-        <div class="bar"><button class="go" id="lgo">▶ Afficher</button><button class="stop" id="lhide">■ Masquer</button></div>
-        <div class="livechip" id="lc-lyrics"></div>
-        <div class="row" id="llay"></div>
         <div class="row"><input id="sfilter" placeholder="Filtrer les chants…"><button id="snew" class="primary">➕ Nouveau</button><button id="spptx" class="sm">📥 PowerPoint</button><input type="file" id="spptxf" accept=".pptx" hidden></div>
         <div class="hint">Un clic sur une strophe l'affiche tout de suite.</div>
-        <div class="list" id="slist"></div>
+        <div class="list" id="slist" style="max-height:30vh"></div>
         <div id="sdetail"></div>
       </div>
       <div id="songedit" style="display:none">
@@ -259,6 +258,14 @@
       <div class="hint">Aperçu de la sortie (damier = transparent).</div>
     </div>
 
+    <div class="card" id="sctl" style="margin-top:16px;display:none">
+      <div class="bar" style="margin-top:0"><button class="go" id="lgo">▶ Afficher</button><button class="stop" id="lhide">■ Masquer</button></div>
+      <div class="livechip" id="lc-lyrics"></div>
+      <div class="row" id="llay"></div>
+      <div class="row"><button id="lprev">◀ Strophe préc.</button><button id="lnext">Strophe suiv. ▶</button></div>
+      <div class="hint">Un clic sur une strophe (à gauche) l'affiche tout de suite.</div>
+    </div>
+
     <div class="card" id="vctl" style="margin-top:16px">
       <div class="row" style="margin-top:0"><input id="ref" placeholder="Un livre (Jean, Ps…) ou une référence (Jn 3:16)" autocomplete="off" autofocus></div>
       <div class="bar"><button class="go" id="vgo">▶ Projeter</button><button class="stop" id="vhide">■ Masquer</button></div>
@@ -330,12 +337,17 @@ const targetSec = () => { const P = S && S.plan; const x = P && P.sections.find(
 function addToPlan(item) { send('plan.add', { item }); toast('Ajouté au déroulé' + (targetSec() ? ' : « ' + targetSec() + ' »' : '')); }
 
 // ---------- onglets + masquage automatique ----------
+let curTab = 'verse';
+function syncCtl() {
+  $('#vctl').style.display = curTab === 'verse' ? '' : 'none';
+  $('#sctl').style.display = curTab === 'songs' && $('#songview').style.display !== 'none' ? '' : 'none';
+}
 const HIDE = { verse: ['verse', 'verse.hide'], songs: ['lyrics', 'lyrics.hide'], media: ['media', 'media.hide'] };
 $('#tabs').addEventListener('click', e => {
   const t = e.target.dataset.t; if (!t) return;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b === e.target));
   document.querySelectorAll('.tab').forEach(d => d.classList.toggle('on', d.id === 't-' + t));
-  $('#vctl').style.display = t === 'verse' ? '' : 'none';
+  curTab = t; syncCtl();
   if (S && S.prefs.autoHide && HIDE[t]) for (const k in HIDE) if (k !== t && S.live[HIDE[k][0]].on) send(HIDE[k][1]);
 });
 
@@ -580,11 +592,11 @@ function editSong(s) {
   editId = s ? s.id : null; $('#etitle').value = s ? s.title : '';
   $('#etext').value = s ? s.sections.map((t, i) => ((s.labels || [])[i] ? '[' + s.labels[i] + ']\n' : '') + t).join('\n\n') : '';
   $('#eauto').checked = !s; $('#eper').value = '2';
-  $('#edel').style.display = s ? '' : 'none'; $('#songview').style.display = 'none'; $('#songedit').style.display = '';
+  $('#edel').style.display = s ? '' : 'none'; $('#songview').style.display = 'none'; $('#songedit').style.display = ''; syncCtl();
   songPreview();
 }
 $('#snew').onclick = () => editSong(null);
-$('#ecancel').onclick = () => { $('#songview').style.display = ''; $('#songedit').style.display = 'none'; };
+$('#ecancel').onclick = () => { $('#songview').style.display = ''; $('#songedit').style.display = 'none'; syncCtl(); };
 $('#esave').onclick = async () => {
   try {
     const list = songPreview();
@@ -593,6 +605,8 @@ $('#esave').onclick = async () => {
   } catch (e) { toast(e.message); }
 };
 $('#edel').onclick = async () => { if (!confirm('Supprimer ce chant ?')) return; await api('/api/songs?id=' + editId, { method: 'DELETE' }); curSong = null; await loadSongs(); renderSong(); $('#ecancel').click(); };
+$('#lprev').onclick = () => send('step', { dir: -1 });
+$('#lnext').onclick = () => send('step', { dir: 1 });
 $('#spptx').onclick = () => $('#spptxf').click();
 $('#spptxf').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
