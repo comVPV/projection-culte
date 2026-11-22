@@ -42,6 +42,7 @@
   .vtxt { background:#10141b; border-radius:8px; padding:10px 12px; margin:6px 0; }
   .vtxt b { color:#f5c542; }
   .list { max-height:50vh; overflow:auto; }
+  #browse { max-height:72vh; }
   .item { display:flex; gap:8px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin:5px 0; cursor:pointer; }
   .item:hover { background:#222a38; } .item.cur { border-color:var(--live); background:#2b2024; }
   .item .t { flex:1; }
@@ -118,25 +119,9 @@
 
     <!-- ================= VERSET ================= -->
     <div class="tab on" id="t-verse">
-      <div class="row"><input id="ref" placeholder="Un livre (Jean, Ps…) ou une référence (Jn 3:16)" autocomplete="off" autofocus></div>
-      <div class="bar"><button class="go" id="vgo">▶ Projeter</button><button class="stop" id="vhide">■ Masquer</button></div>
-      <div class="livechip" id="lc-verse"></div>
-
+      <div class="hint">Choisis un livre, un chapitre puis un verset. Projection, versions, affichage et recherche par mots : sous l'aperçu, à droite.</div>
       <div class="crumb" id="crumb"></div>
-      <div class="row"><button class="sm" id="rangebtn">Plage de versets : non</button><span class="hint">ou Maj + clic sur un 2ᵉ verset</span></div>
-      <div class="lbl tight">Versions (plusieurs = côte à côte)</div>
-      <div class="row" id="vers"></div>
-      <div class="lbl tight">Affichage</div>
-      <div class="row" id="vlay"></div>
-      <div class="row"><button id="vprev">◀ Verset préc.</button><button id="vnext">Verset suiv. ▶</button><button id="vplan">➕ Déroulé</button></div>
-
-      <div id="vpreview"></div>
       <div id="browse" class="list"></div>
-
-      <div class="lbl">Recherche par mots</div>
-      <div class="row"><input id="q" placeholder="ex : bon berger"><select id="qt" style="width:auto"><option value="all">Toute la Bible</option><option value="ot">Ancien Testament</option><option value="nt">Nouveau Testament</option><option value="book">Livre ouvert</option></select><button id="qgo">Chercher</button></div>
-      <div id="qinfo" class="hint"></div>
-      <div id="qres" class="list"></div>
     </div>
 
     <!-- ================= CHANTS ================= -->
@@ -164,6 +149,7 @@
     <!-- ================= MÉDIAS ================= -->
     <div class="tab" id="t-media">
       <div class="bar"><button class="go" id="mgo">▶ Afficher</button><button class="stop" id="mhide">■ Masquer</button></div>
+      <div class="row"><label><input type="checkbox" id="m-ann" checked style="width:auto"> Afficher aussi sur l'écran du prédicateur (annonces)</label></div>
       <div class="livechip" id="lc-media"></div>
       <div class="row"><button class="primary" id="mup">⬆ Ajouter images / vidéos</button><button id="mcard">📣 Annonce sans visuel</button><input type="file" id="mupf" accept="image/*,video/mp4,video/webm,video/quicktime,.mov,.m4v" multiple hidden></div>
       <div class="hint">Astuce : dans PowerPoint, <i>Fichier → Exporter → PNG</i> puis ajoute les images ici. Un clic sur une image ou une vidéo l'affiche. Vidéos : MP4 (H.264) ou WebM.</div>
@@ -272,6 +258,24 @@
       <div class="chips"><span class="chip" id="c-verse">Verset</span><span class="chip" id="c-lyrics">Paroles</span><span class="chip" id="c-media">Image</span><span class="chip" id="c-lower">Bandeau</span></div>
       <div class="hint">Aperçu de la sortie (damier = transparent).</div>
     </div>
+
+    <div class="card" id="vctl" style="margin-top:16px">
+      <div class="row" style="margin-top:0"><input id="ref" placeholder="Un livre (Jean, Ps…) ou une référence (Jn 3:16)" autocomplete="off" autofocus></div>
+      <div class="bar"><button class="go" id="vgo">▶ Projeter</button><button class="stop" id="vhide">■ Masquer</button></div>
+      <div class="livechip" id="lc-verse"></div>
+      <div class="row"><button class="sm" id="rangebtn">Plage de versets : non</button><span class="hint">ou Maj + clic sur un 2ᵉ verset</span></div>
+      <div class="lbl tight">Versions (plusieurs = côte à côte)</div>
+      <div class="row" id="vers"></div>
+      <div class="lbl tight">Affichage</div>
+      <div class="row" id="vlay"></div>
+      <div class="row"><button id="vprev">◀ Verset préc.</button><button id="vnext">Verset suiv. ▶</button><button id="vplan">➕ Déroulé</button></div>
+      <div id="vpreview"></div>
+
+      <div class="lbl">Recherche par mots</div>
+      <div class="row"><input id="q" placeholder="ex : bon berger"><select id="qt" style="width:auto"><option value="all">Toute la Bible</option><option value="ot">Ancien Testament</option><option value="nt">Nouveau Testament</option><option value="book">Livre ouvert</option></select><button id="qgo">Chercher</button></div>
+      <div id="qinfo" class="hint"></div>
+      <div id="qres" class="list"></div>
+    </div>
   </section>
 </main>
 <div class="toast" id="toast"></div>
@@ -283,6 +287,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 let S = null, bibles = [], songs = [], media = [], curSong = null, curSection = 0, selMedia = null, ws, chronoOffset = 0;
 let sel = null, anchor = null, rangeMode = false, browse = { mode: 'books' }, lastLiveP = '', renderSeq = 0;
 
+const annOn = () => { const c = $('#m-ann'); return !c || c.checked; };
 const VL = [['lower', 'Bandeau bas'], ['side', 'Panneau côté'], ['center', 'Centré'], ['full', 'Plein écran']];
 const LL = [['bottom', 'Bas'], ['center', 'Centre']];
 const ML = [['full', 'Plein écran'], ['split-r', 'Image à droite'], ['split-l', 'Image à gauche'], ['pip-br', 'Petite ↘'], ['pip-bl', 'Petite ↙'], ['pip-tr', 'Petite ↗'], ['pip-tl', 'Petite ↖']];
@@ -330,6 +335,7 @@ $('#tabs').addEventListener('click', e => {
   const t = e.target.dataset.t; if (!t) return;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b === e.target));
   document.querySelectorAll('.tab').forEach(d => d.classList.toggle('on', d.id === 't-' + t));
+  $('#vctl').style.display = t === 'verse' ? '' : 'none';
   if (S && S.prefs.autoHide && HIDE[t]) for (const k in HIDE) if (k !== t && S.live[HIDE[k][0]].on) send(HIDE[k][1]);
 });
 
@@ -471,6 +477,8 @@ function markVerses(scroll) {
   });
   if (scroll) { const s = document.querySelector('#browse .vrow.sel'); if (s) s.scrollIntoView({ block: 'center' }); }
 }
+// un verset est déjà à l'écran et on saute à un autre verset du même chapitre : projection directe
+function liveSameChapter() { const V = S && S.live.verse; return !!(V && V.on && V.p && V.p.book === browse.book && V.p.chapter === browse.chapter); }
 async function pickVerse(n, shift) {
   if ((rangeMode || shift) && sel && sel.book === browse.book && sel.chapter === browse.chapter && anchor != null) {
     sel = { book: browse.book, chapter: browse.chapter, v1: Math.min(anchor, n), v2: Math.max(anchor, n) };
@@ -478,7 +486,7 @@ async function pickVerse(n, shift) {
   } else { sel = { book: browse.book, chapter: browse.chapter, v1: n, v2: n }; anchor = n; }
   markVerses(false);
   await previewSel(true);
-  if (S.prefs.directClick && sel.v1 === sel.v2) project();
+  if ((S.prefs.directClick && sel.v1 === sel.v2) || liveSameChapter()) project();
 }
 
 // --- recherche par mots
@@ -607,7 +615,7 @@ function buildMedia() {
     const d = el('<div class="thumb" data-u="' + m.url + '" title="' + esc(m.name) + '">' + (isV ? '<video muted preload="metadata" src="' + m.url + '#t=0.5"></video><span class="badge">▶ vidéo</span>' : '<img loading="lazy" src="' + m.url + '">') +
       '<button class="x sm">✕</button><button class="addb sm" title="Ajouter au déroulé">➕</button><button class="x sm bgb" style="top:auto;bottom:3px;right:3px" title="Utiliser comme fond d\'écran auxiliaire">Fond</button></div>');
     if (isV) { const v = d.querySelector('video'); v.onerror = () => d.classList.add('bad'); }
-    d.onclick = () => { selMedia = m; send('media.show', { src: m.url, name: m.name }); };
+    d.onclick = () => { selMedia = m; send('media.show', { src: m.url, name: m.name, announce: annOn() }); };
     d.querySelector('.bgb').onclick = e => { e.stopPropagation(); send('bg.set', { src: m.url, type: m.type }); toast('Défini comme fond (écran auxiliaire)'); };
     d.querySelector('.addb').onclick = e => { e.stopPropagation(); addToPlan({ type: 'media', src: m.url, layout: S.live.media.layout, label: m.name }); };
     d.querySelector('.x').onclick = async e => { e.stopPropagation(); if (confirm('Supprimer « ' + m.name + ' » ?')) { await api('/api/media?name=' + encodeURIComponent(m.name), { method: 'DELETE' }); loadMedia(); } };
@@ -627,7 +635,7 @@ $('#mupf').onchange = async e => {
   for (const f of files) { toast('Envoi de « ' + f.name + ' »…'); try { await uploadMedia(f); } catch (err) { toast(err.message); } }
   await loadMedia(); toast('Envoi terminé');
 };
-$('#mgo').onclick = () => { if (!selMedia) return toast('Touche une image ou une vidéo pour la choisir'); send('media.show', { src: selMedia.url, name: selMedia.name }); };
+$('#mgo').onclick = () => { if (!selMedia) return toast('Touche une image ou une vidéo pour la choisir'); send('media.show', { src: selMedia.url, name: selMedia.name, announce: annOn() }); };
 $('#mhide').onclick = () => send('media.hide');
 $('#bgnone').onclick = () => send('bg.clear');
 $('#bgdim').oninput = e => send('bg.dim', { value: e.target.value / 100 });
@@ -667,7 +675,7 @@ function readAnnounce(o) {
   const card = { title: v('#a-title'), dateISO: v('#a-date'), date: fmtDate(v('#a-date')), timeRaw: v('#a-time'), time: fmtTime(v('#a-time')), place: v('#a-place'), speaker: v('#a-speaker'), extra: v('#a-extra') };
   return { type: 'announce', mode: 'card', card, layout, label: card.title };
 }
-function showAnnounce(it) { it.mode === 'card' ? send('media.show', { kind: 'card', card: it.card, layout: it.layout, name: it.label }) : send('media.show', { src: it.src, layout: it.layout, name: it.label }); }
+function showAnnounce(it) { it.mode === 'card' ? send('media.show', { kind: 'card', card: it.card, layout: it.layout, name: it.label, announce: true }) : send('media.show', { src: it.src, layout: it.layout, name: it.label, announce: true }); }
 $('#mcard').onclick = () => {
   const o = modal('📣 Annonce', announceForm(), [
     { label: 'Annuler', fn: () => true },

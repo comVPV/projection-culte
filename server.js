@@ -154,7 +154,7 @@ function showMedia(a) {
   if (kind !== 'card' && !a.src) throw new Error('Aucun fichier à afficher');
   const card = kind === 'card' ? cardOf(a.card) : null;
   state.live.media = {
-    ...prev, on: true, kind, src: kind === 'card' ? '' : a.src, name: a.name || (card ? card.title : ''), layout: a.layout || prev.layout, card,
+    ...prev, on: true, kind, src: kind === 'card' ? '' : a.src, name: a.name || (card ? card.title : ''), layout: a.layout || prev.layout, card, announce: kind === 'card' || !!a.announce,
     video: { playing: true, loop: !!prev.video.loop, muted: !!prev.video.muted, rev: (prev.video.rev || 0) + 1 },
   };
 }
@@ -207,8 +207,8 @@ function goPlan(id, startAt) {
   } else if (it.type === 'media') {
     showMedia({ src: it.src, name: it.label, layout: it.layout });
   } else if (it.type === 'announce') {
-    if (it.mode === 'card') showMedia({ kind: 'card', card: it.card, name: it.label, layout: it.layout });
-    else showMedia({ src: it.src, name: it.label, layout: it.layout });
+    if (it.mode === 'card') showMedia({ kind: 'card', card: it.card, name: it.label, layout: it.layout, announce: true });
+    else showMedia({ src: it.src, name: it.label, layout: it.layout, announce: true });
   } else if (it.type === 'lower') {
     showLower(it.title, it.sub || '', f.s.id);
   }

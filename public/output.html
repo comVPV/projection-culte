@@ -90,7 +90,7 @@ const q = new URLSearchParams(location.search);
 const MONITOR = q.get('monitor') === '1';   // moniteur prédicateur : verset en plein écran uniquement
 const SCREEN = q.get('screen') === '1';     // écran auxiliaire : fond vidéo/image opaque
 const PREVIEW = q.get('preview') === '1';   // aperçu dans la régie : vidéo muette
-const only = MONITOR ? 'verse' : (q.get('layer') || 'all');
+const only = MONITOR ? 'mon' : (q.get('layer') || 'all');   // moniteur : versets + annonces
 document.body.classList.add('bg-' + (q.get('bg') || (SCREEN || MONITOR ? 'black' : 'transparent')));
 
 const stage = document.getElementById('stage');
@@ -163,7 +163,7 @@ function render(S) {
   root.setProperty('--l-color', T.lyrics.color); root.setProperty('--l-outline', T.lyrics.outline); root.setProperty('--l-ow', (Math.max(0, Math.min(40, +T.lyrics.outlineW || 0)) / 100) + 'em'); root.setProperty('--l-weight', T.lyrics.weight);
   root.setProperty('--m-panel', T.media.panel); root.setProperty('--m-img', cssUrl(T.media.bgImage));
 
-  const show = k => only === 'all' || only === k;
+  const show = k => only === 'all' || only === k || (only === 'mon' && (k === 'verse' || (k === 'media' && !!S.live.media.announce)));
   let cam = null;
 
   // --- fond (écran auxiliaire uniquement)
@@ -188,29 +188,29 @@ function render(S) {
   const showM = show('media') && M.on;
   mEl.classList.toggle('on', showM);
   if (showM) {
-    const kind = M.kind || 'image', lay = mediaRects(M.layout, T.media);
-    mEl.classList.toggle('pip', M.layout.startsWith('pip'));
+    const kind = M.kind || 'image', ml = MONITOR ? 'full' : M.layout, lay = mediaRects(ml, T.media);
+    mEl.classList.toggle('pip', ml.startsWith('pip'));
     place(mEl.querySelector('.panel'), lay.panel);
     if (kind === 'image') { if (mimg.getAttribute('src') !== M.src) mimg.src = M.src; place(mimg, lay.img); } else place(mimg, null);
     if (kind === 'card') {
       mcard.style.display = 'flex'; place(mcard, lay.img);
-      if (changed('card', [M.card, M.layout, T.font, T.media, T.verse.color, T.verse.refColor, T.media.imgScale])) {
+      if (changed('card', [M.card, ml, T.font, T.media, T.verse.color, T.verse.refColor, T.media.imgScale])) {
         const c = M.card || {}, ci = mcard.querySelector('.ci');
         ci.innerHTML = '<div class="c-t">' + esc(c.title || '') + '</div><div class="c-d">' + esc((c.date || '') + (c.time ? '  ·  ' + c.time : '')) + '</div>' +
           (c.place ? '<div class="c-p">' + esc(c.place) + '</div>' : '') + (c.speaker ? '<div class="c-s">' + esc(c.speaker) + '</div>' : '') + (c.extra ? '<div class="c-x">' + esc(c.extra) + '</div>' : '');
-        const pad = M.layout.startsWith('pip') ? 48 : 120;
-        fit(mcard, ci, M.layout.startsWith('pip') ? 34 : 64, lay.img[3] - pad, 14);
+        const pad = ml.startsWith('pip') ? 48 : 120;
+        fit(mcard, ci, ml.startsWith('pip') ? 34 : 64, lay.img[3] - pad, 14);
       }
     } else mcard.style.display = 'none';
     if (kind === 'video') {
       place(mvid, lay.img);
       const V = M.video || {};
       if (mvid.dataset.src !== M.src) { mvid.dataset.src = M.src; mvid.src = M.src; mvid.dataset.rev = ''; }
-      mvid.loop = !!V.loop; mvid.muted = PREVIEW || !!V.muted;
+      mvid.loop = !!V.loop; mvid.muted = PREVIEW || MONITOR || !!V.muted;
       if (mvid.dataset.rev !== String(V.rev)) { mvid.dataset.rev = String(V.rev); try { mvid.currentTime = 0; } catch {} }
       if (V.playing) { const pr = mvid.play(); if (pr) pr.catch(() => { mvid.muted = true; mvid.play().catch(() => {}); }); } else mvid.pause();
     } else { place(mvid, null); mvid.pause(); }
-    cam = lay.cam;
+    if (!MONITOR) cam = lay.cam;
   } else if (!mvid.paused) mvid.pause();
 
   // --- versets
