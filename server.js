@@ -552,32 +552,38 @@ async function pptxToSong(buf) {
     .sort((a, b) => parseInt(a.match(/(\d+)\.xml/)[1]) - parseInt(b.match(/(\d+)\.xml/)[1]));
   const dec = s => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
   const paraText = pm => { let line = ''; for (const m of pm.matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>|<a:br\s*\/>/g)) line += m[1] === undefined ? '\n' : dec(m[1]); return line.replace(/\s+$/g, ''); };
-  const key = t => t.toLowerCase().replace(/\s+/g, ' ').trim();
-  const pages = [];   // { paras: [{t, title}] }
+  // clé de comparaison tolérante : sans accents, ponctuation, chiffres ni casse ("Grand est ton nom (2/4)" = "grand est ton nom")
+  const key = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z\u0400-\u04ff\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const flat = t => t.replace(/\s*\n\s*/g, ' ');
+  const pages = [];   // chaque diapo : lignes triées de haut en bas { t, title }
   for (const n of slides) {
     const xml = await zip.file(n).async('string');
-    const paras = [];
+    const items = [];
     const shapes = xml.match(/<p:sp[ >][\s\S]*?<\/p:sp>/g) || [xml];
-    for (const sh of shapes) {
-      if (/<p:ph[^>]*type="(sldNum|ftr|dt)"/.test(sh)) continue;   // numéro, pied de page, date
+    shapes.forEach((sh, si) => {
+      if (/<p:ph[^>]*type="(sldNum|ftr|dt)"/.test(sh)) return;   // numéro, pied de page, date
       const isTitle = /<p:ph[^>]*type="(title|ctrTitle)"/.test(sh);
-      for (const pm of sh.matchAll(/<a:p[ >][\s\S]*?<\/a:p>/g)) { const t = paraText(pm[0]); if (t.trim()) paras.push({ t, title: isTitle }); }
-    }
-    pages.push(paras);
+      const off = sh.match(/<a:off\s+x="(-?\d+)"\s+y="(-?\d+)"/);
+      const y = off ? +off[2] : (isTitle ? -1 : 1e9 + si);   // pas de position : ordre du fichier, titre en premier
+      let k = 0;
+      for (const pm of sh.matchAll(/<a:p[ >][\s\S]*?<\/a:p>/g)) { const t = paraText(pm[0]); if (t.trim()) items.push({ t, title: isTitle, y, k: si * 1000 + k++ }); }
+    });
+    items.sort((a, b) => a.y - b.y || a.k - b.k);
+    pages.push(items);
   }
-  // Titre : pris une seule fois (zone « titre » du PowerPoint, sinon première ligne répétée sur la plupart des diapos)
+  // Titre : pris une seule fois. Zone « titre » du PowerPoint, sinon la première ligne (en haut de la diapo) répétée sur au moins la moitié des diapos.
   let title = '', tkey = '';
   const count = {};
-  const tit = pages.flatMap(ps => ps.filter(x => x.title).map(x => x.t.replace(/\s*\n\s*/g, ' ')));
+  const tit = pages.flatMap(ps => ps.filter(x => x.title).map(x => flat(x.t)));
   if (tit.length) { tit.forEach(t => { count[key(t)] = (count[key(t)] || 0) + 1; }); tkey = Object.keys(count).sort((a, b) => count[b] - count[a])[0]; title = tit.find(t => key(t) === tkey); }
-  else if (pages.length >= 3) {
-    for (const ps of pages) if (ps[0]) { const k = key(ps[0].t); count[k] = (count[k] || 0) + 1; }
+  if (!tkey && pages.length >= 2) {
+    for (const ps of pages) { const k = ps[0] && key(flat(ps[0].t)); if (k) count[k] = (count[k] || 0) + 1; }
     const best = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
-    if (best && count[best] >= Math.ceil(pages.length * 0.6)) { tkey = best; title = pages.find(ps => ps[0] && key(ps[0].t) === best)[0].t; }
+    if (best && count[best] >= Math.max(2, Math.ceil(pages.length * 0.5))) { tkey = best; title = flat(pages.find(ps => ps[0] && key(flat(ps[0].t)) === best)[0].t); }
   }
   const sections = [];
   for (const ps of pages) {
-    const lines = ps.filter(x => !(tkey && key(x.t.replace(/\s*\n\s*/g, ' ')) === tkey)).map(x => x.t);
+    const lines = ps.filter(x => !(tkey && key(flat(x.t)) === tkey)).map(x => x.t);
     if (lines.length) sections.push(lines.join('\n'));
   }
   return { title: title.trim(), sections };
