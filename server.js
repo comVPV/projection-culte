@@ -6,6 +6,7 @@ const os = require('os');
 const { WebSocketServer } = require('ws');
 const JSZip = require('jszip');
 const bible = require('./lib/bible');
+const { Obs } = require('./lib/obs');
 
 const PORT = +process.env.PORT || 8080;
 const ROOT = __dirname;
@@ -33,9 +34,9 @@ const uid = () => Date.now().toString(36) + (uidN++).toString(36) + Math.random(
 // ---------------- État ----------------
 const DEFAULT_THEME = {
   font: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  verse: { size: 58, color: '#ffffff', bg: '#101820', bgAlpha: 0.85, refColor: '#f5c542', refSize: 52, bgImage: '' },
+  verse: { sideW: 740, size: 58, color: '#ffffff', bg: '#101820', bgAlpha: 0.85, refColor: '#f5c542', refSize: 52, bgImage: '' },
   lyrics: { size: 78, color: '#ffffff', outline: '#000000', outlineW: 11, weight: 700, upper: false },
-  media: { panel: '#101820', bgImage: '', camWidth: 640, imgScale: 100, pipSize: 560 },
+  media: { panel: '#101820', bgImage: '', camWidth: 640, imgScale: 100, pipSize: 560, camSize: 560 },
   monitor: { size: 96, color: '#ffffff', bg: '#000000', refColor: '#f5c542', refSize: 52, bgImage: '', chronoSize: 90, chronoColor: '#ffffff', chronoBg: '#101820', chronoBgAlpha: 0.88, chronoPos: 'bc' },
   lower: { size: 44, color: '#ffffff', bg: '#101820', bgAlpha: 0.88, accent: '#f5c542', pos: 'left' },
 };
@@ -82,6 +83,7 @@ const state = {
   chrono: { running: false, base: 0, startedAt: 0, visible: true, now: 0 },
   update: { current: VERSION, latest: '', available: false, checking: false, installing: false, error: '', canRollback: false },
   backup: { dir: '', last: 0, count: 0, error: '' },
+  obs: { cfg: {}, status: {} },
   guide: false,
   fonts: [],
   background: { src: '', type: '', dim: 0.35, ...(saved.background || {}) },
@@ -104,9 +106,26 @@ if ((saved.mig || 0) < MIG) {
   if (!Array.isArray(v) || !v.length || (v.length === 1 && v[0] === 'kjv')) state.prefs.versions = ['lsg1910', 'kjv'];
 }
 let saveTimer = null;
+let obsT = null;
+const obs = new Obs(st => { state.obs.status = st; clearTimeout(obsT); obsT = setTimeout(() => broadcast(), 50); });
+function obsPublic() { const c = obs.cfg; state.obs.cfg = { enabled: c.enabled, host: c.host, port: c.port, scene: c.scene, camSource: c.camSource, shiftX: c.shiftX, hasPassword: !!c.password }; }
+function camZone() {
+  const L = state.live, T = state.theme, M = T.media;
+  const cw = Math.max(200, Math.min(1000, +M.camWidth || 640)), cs = Math.max(240, Math.min(900, +M.camSize || 560));
+  if (L.verse.on && L.verse.layout === 'side') return { rect: [0, 0, 1920 - Math.max(400, Math.min(1200, +T.verse.sideW || 740)), 1080] };
+  if (L.media.on) {
+    const l = L.media.layout;
+    if (l === 'split-r') return { rect: [0, 0, cw, 1080] };
+    if (l === 'split-l') return { rect: [1920 - cw, 0, cw, 1080] };
+    if (/^cam-/.test(l)) return { rect: [l[5] === 'r' ? 1920 - cs - 40 : 40, l[4] === 'b' ? 1080 - cs * 9 / 16 - 40 : 40, cs, cs * 9 / 16], top: true };
+  }
+  return { rect: [0, 0, 1920, 1080] };
+}
+function updateObs() { obsPublic(); try { obs.apply(camZone()); } catch (e) {} }
+function persistObsCfg() {}
 function persist() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => writeJSON(STATE_FILE, { mig: MIG, theme: state.theme, prefs: state.prefs, plan: { ...state.plan, cursor: null }, lowers: state.lowers, background: state.background }), 400);
+  saveTimer = setTimeout(() => writeJSON(STATE_FILE, { mig: MIG, theme: state.theme, prefs: state.prefs, plan: { ...state.plan, cursor: null }, lowers: state.lowers, background: state.background, obsCfg: obs.cfg }), 400);
 }
 
 const loadSongs = () => readJSON(SONGS_FILE, []);
@@ -120,9 +139,12 @@ function showVerse(a) {
   if (!p) throw new Error('Référence introuvable : « ' + (a.ref || '') + ' »');
   const versions = ids.map(id => bible.getPassage(id, p)).filter(Boolean);
   if (!versions.length) throw new Error('Passage introuvable dans la version choisie');
-  let layout = a.layout || state.live.verse.layout;
+  const pv = state.live.verse;
+  let layout = a.layout || (!state.live.lower.on && pv.want) || pv.layout;   // après le bandeau, le verset retrouve la disposition choisie au verset suivant
   if (state.live.lower.on && (layout === 'lower' || layout === 'center')) layout = 'side';   // bandeau à l'écran : le verset passe à droite
-  state.live.verse = { on: true, layout, ref: bible.refLabel(p, versions[0].lang), versions, p, ids };
+  if (layout === 'full') hideLower();
+  const keepWant = state.live.lower.on && layout === 'side' ? (pv.want || '') : '';
+  state.live.verse = { want: keepWant, on: true, layout, ref: bible.refLabel(p, versions[0].lang), versions, p, ids };
 }
 
 function navVerse(dir) {
@@ -154,6 +176,7 @@ function showMedia(a) {
   const kind = a.kind || (a.card ? 'card' : VID.test(a.src || '') ? 'video' : 'image');
   if (kind !== 'card' && !a.src) throw new Error('Aucun fichier à afficher');
   const card = kind === 'card' ? cardOf(a.card) : null;
+  { const nl = a.layout || prev.layout; if (nl === 'full' || /^cam-/.test(nl)) hideLower(); }
   state.live.media = {
     ...prev, on: true, kind, src: kind === 'card' ? '' : a.src, name: a.name || (card ? card.title : ''), layout: a.layout || prev.layout, card, announce: kind === 'card' || !!a.announce,
     video: { playing: true, loop: !!prev.video.loop, muted: !!prev.video.muted, rev: (prev.video.rev || 0) + 1 },
@@ -163,13 +186,15 @@ function showMedia(a) {
 let lowerTimer = null;
 function hideLower() { clearTimeout(lowerTimer); lowerTimer = null; state.live.lower = { on: false, title: '', sub: '', sec: '', until: 0 }; }
 // Affiche un bandeau, rattaché à une section : il disparaît quand on en sort, ou après lowerSecs secondes (0 = jamais)
+const isFullscreen = () => { const L = state.live; return (L.verse.on && L.verse.layout === 'full') || (L.media.on && (L.media.layout === 'full' || /^cam-/.test(L.media.layout))); };
 function showLower(title, sub, sec) {
+  if (isFullscreen()) throw new Error('Pas de bandeau pendant un affichage plein écran : change la disposition ou masque l\'affichage.');
   clearTimeout(lowerTimer); lowerTimer = null;
   const secs = Math.max(0, Math.min(600, +state.prefs.lowerSecs || 0));
   const until = secs ? Date.now() + secs * 1000 : 0;
   state.live.lower = { on: true, title, sub: sub || '', sec: sec || state.plan.target || '', until };
   // un verset est à l'écran : il passe en panneau à droite pour laisser la place au bandeau (à gauche)
-  if (state.live.verse.on && state.live.verse.layout !== 'side') state.live.verse.layout = 'side';
+  if (state.live.verse.on && state.live.verse.layout !== 'side') { state.live.verse.want = state.live.verse.layout; state.live.verse.layout = 'side'; }
   if (secs) lowerTimer = setTimeout(() => { lowerTimer = null; if (state.live.lower.on && state.live.lower.until === until) { hideLower(); broadcast(); } }, secs * 1000 + 50);
 }
 function hideAll() {
@@ -217,9 +242,13 @@ function goPlan(id, startAt) {
   }
 }
 
-function step(dir) {
+function step(dir, o = {}) {
   const ly = state.live.lyrics;
-  if (ly.on && ly.songId) {
+  if (o.only === 'lyrics') {
+    if (ly.on && ly.songId) { const ns = ly.section + dir; if (ns >= 0 && ns < ly.total) showSection(ly.songId, ns); }
+    return;
+  }
+  if (!o.plan && ly.on && ly.songId) {
     const ns = ly.section + dir;
     if (ns >= 0 && ns < ly.total) { showSection(ly.songId, ns); return; }
   }
@@ -280,7 +309,11 @@ function handle(cmd, a) {
     case 'hide.all': hideAll(); break;
     case 'layout.set':
       if (!L[a.kind] || a.kind === 'lower') break;
-      L[a.kind].layout = a.layout; state.prefs[a.kind] = a.layout; break;
+      if (a.kind === 'media' && !/^(full|split-[rl]|pip-(br|bl|tr|tl)|cam-(br|bl|tr|tl))$/.test(a.layout)) break;
+      L[a.kind].layout = a.layout; state.prefs[a.kind] = a.layout;
+      if (a.kind === 'verse') { L.verse.want = ''; if (a.layout === 'full') hideLower(); else if (L.lower.on && (a.layout === 'lower' || a.layout === 'center')) { L.verse.want = a.layout; L.verse.layout = 'side'; } }
+      if (a.kind === 'media' && L.media.on && (a.layout === 'full' || /^cam-/.test(a.layout))) hideLower();
+      break;
     case 'versions.set': state.prefs.versions = a.versions || []; break;
     case 'bg.set': state.background = { ...state.background, src: a.src, type: a.type === 'video' ? 'video' : 'image' }; break;
     case 'bg.clear': state.background = { ...state.background, src: '', type: '' }; break;
@@ -296,7 +329,13 @@ function handle(cmd, a) {
       if (a.key === 'lowerSecs') state.prefs.lowerSecs = Math.max(0, Math.min(600, parseInt(a.value, 10) || 0));
       if (a.key === 'backupDir') { state.prefs.backupDir = String(a.value || '').trim().slice(0, 500); syncBackup(); }
       break;
-    case 'step': step(a.dir > 0 ? 1 : -1); break;
+    case 'obs.set': {
+      const c = {};
+      for (const k of ['enabled', 'host', 'port', 'scene', 'camSource', 'shiftX']) if (a[k] !== undefined) c[k] = k === 'enabled' ? !!a[k] : a[k];
+      if (typeof a.password === 'string') c.password = a.password;
+      obs.configure(c); break;
+    }
+    case 'step': step(a.dir > 0 ? 1 : -1, a); break;
     // ----- déroulé -----
     case 'plan.add': {
       const sec = state.plan.sections.find(s => s.id === (a.sec || state.plan.target)) || state.plan.sections[0];
@@ -650,6 +689,9 @@ const server = http.createServer(async (req, res) => {
         writeJSON(SONGS_FILE, loadSongs().filter(x => x.id !== q.get('id')));
         return send(res, 200, { ok: true });
       }
+      if (p === '/api/obs/test' && req.method === 'POST') {
+        try { return send(res, 200, { ok: true, ...(await obs.test()) }); } catch (e) { return send(res, 200, { ok: false, error: e.message }); }
+      }
       if (p === '/api/songs/import-pptx' && req.method === 'POST') {
         const { title, sections } = await pptxToSong(await readBody(req));
         if (!sections.length) return send(res, 400, { error: 'Aucun texte trouvé dans ce PowerPoint' });
@@ -718,6 +760,7 @@ const server = http.createServer(async (req, res) => {
 const wss = new WebSocketServer({ server });
 wss.on('error', () => {});
 function broadcast() {
+  updateObs();
   state.chrono.now = Date.now();
   const msg = JSON.stringify({ type: 'state', state });
   for (const c of wss.clients) if (c.readyState === 1) c.send(msg);
@@ -754,3 +797,4 @@ server.on('listening', () => {
   if (!process.env.CULTE_NO_UPDATE_CHECK) { setTimeout(checkUpdate, 4000); setInterval(checkUpdate, 6 * 3600e3); }
 });
 server.listen(PORT, '0.0.0.0');
+if (saved.obsCfg) obs.configure(saved.obsCfg); else obsPublic();

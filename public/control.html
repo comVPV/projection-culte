@@ -22,8 +22,18 @@
   textarea { min-height:260px; resize:vertical; font-family:inherit; }
   main { display:grid; grid-template-columns: minmax(340px, 1fr) minmax(340px, 560px); gap:16px; padding:16px; max-width:1500px; margin:0 auto; }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; } .right { order:-1; } }
-  /* colonne de droite (aperçu + boutons) : reste fixe quand on défile à gauche */
-  @media (min-width: 901px) { .right { position: sticky; top: 74px; align-self: start; max-height: calc(100vh - 90px); overflow-y: auto; } }
+  /* deux colonnes indépendantes : on défile à gauche, la colonne de droite (aperçu + boutons) ne bouge jamais */
+  @media (min-width: 901px) {
+    body { overflow: hidden; }
+    main { height: calc(100vh - var(--hh, 62px)); overflow: hidden; }
+    main > section { height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+  }
+  /* onglet Chants avec aperçu : les deux écrans tiennent dans la hauteur de la fenêtre */
+  .right.dual #pvrow, .right.dual #pvhint { display: none; }
+  .right.dual .preview { width: min(100%, calc((100vh - 500px) * 1.7778)); min-width: 240px; display: block; margin: 0 auto; }
+  .sec.pvw { outline: 2px solid #f5c542; outline-offset: -2px; }
+  .pvlbl { font-size: 12px; font-weight: 700; letter-spacing: .04em; color: var(--dim); margin: 0 0 4px; text-align: center; }
+  .dia { cursor: pointer; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
   .tabs { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
   .tab { display:none; } .tab.on { display:block; }
@@ -102,8 +112,8 @@
   <span><span class="dot" id="dot"></span><span id="conn">Connexion…</span></span>
   <span class="chw" title="Chronomètre du prédicateur (affiché sur son moniteur)">⏱ <b id="chtime">00:00</b><button class="sm" id="chgo">▶</button><button class="sm" id="chrst" title="Remettre à zéro">⟲</button><label class="hint"><input type="checkbox" id="chvis"> moniteur</label></span>
   <button id="lthide" class="sm danger" style="display:none">Masquer le bandeau</button>
-  <button id="prev">◀ Précédent</button>
-  <button id="next" class="primary">Suivant ▶</button>
+  <button id="prev" title="Touche PageUp">◀ Étape précédente</button>
+  <button id="next" class="primary" title="Touche PageDown">Étape suivante ▶</button>
   <button id="hideall" class="danger">Tout masquer (Échap)</button>
 </header>
 <div class="upd" id="updbar">⬆ Mise à jour disponible : version <b id="updv"></b> <button class="primary sm" id="updgo">Installer</button><button class="sm" id="updlater">Plus tard</button></div>
@@ -121,7 +131,9 @@
 
     <!-- ================= VERSET ================= -->
     <div class="tab on" id="t-verse">
-      <div class="hint">Choisis un livre, un chapitre puis un verset. Projection, versions, affichage et recherche par mots : sous l'aperçu, à droite.</div>
+      <div class="row" style="margin-top:0"><input id="q" placeholder="Recherche par mots : ex. bon berger"><select id="qt" style="width:auto"><option value="all">Toute la Bible</option><option value="ot">Ancien Testament</option><option value="nt">Nouveau Testament</option><option value="book">Livre ouvert</option></select><button id="qgo">Chercher</button></div>
+      <div id="qinfo" class="hint"></div>
+      <div id="qres" class="list"></div>
       <div class="crumb" id="crumb"></div>
       <div id="browse" class="list"></div>
     </div>
@@ -130,7 +142,7 @@
     <div class="tab" id="t-songs">
       <div id="songview">
         <div class="row"><input id="sfilter" placeholder="Filtrer les chants…"><button id="snew" class="primary">➕ Nouveau</button><button id="spptx" class="sm">📥 PowerPoint</button><input type="file" id="spptxf" accept=".pptx" hidden></div>
-        <div class="hint">Un clic sur une strophe l'affiche tout de suite.</div>
+        <div class="hint">Un clic sur une strophe l'affiche dans « Aperçu » ; « Projeter » (ou Entrée) l'envoie en direct.</div>
         <div class="list" id="slist" style="max-height:30vh"></div>
         <div id="sdetail"></div>
       </div>
@@ -195,6 +207,13 @@
       <details open><summary>Préférences de la régie</summary>
         <div class="row"><label><input type="checkbox" id="p-auto"> Masquer automatiquement quand je change d'onglet (Verset / Chants / Images)</label></div>
         <div class="row"><label>Le bandeau se retire tout seul après <input type="number" id="p-lsecs" min="0" max="600" style="width:70px;display:inline-block"> secondes (0 = jamais, il part alors quand on change de section)</label></div>
+        <div class="lbl">Pilotage automatique d'OBS</div>
+        <div class="hint">Dans OBS : Outils → Réglages du serveur WebSocket → activer. Ici, la caméra est recadrée toute seule pour que l'orateur reste au centre de la zone libre.</div>
+        <label class="hint" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="o-en" style="width:auto"> Activer le pilotage d'OBS</label>
+        <div class="row"><input id="o-host" placeholder="Adresse (127.0.0.1)" style="width:150px"><input id="o-port" placeholder="Port" style="width:80px"><input id="o-pw" type="password" placeholder="Mot de passe (si défini)" style="width:190px"></div>
+        <div class="row"><input id="o-scene" placeholder="Scène (vide = scène en cours)" style="width:230px"><input id="o-cam" placeholder="Nom de la source caméra" style="width:230px"></div>
+        <div class="row"><label>Décalage du cadrage <input type="number" id="o-shift" min="-50" max="50" style="width:70px;display:inline-block"> % (− = vers la gauche)</label><button class="sm" id="o-save">Enregistrer</button><button class="sm" id="o-test">Tester la connexion</button></div>
+        <div class="hint" id="o-stat"></div><div class="hint" id="o-list"></div>
         <div class="row"><label><input type="checkbox" id="p-direct"> Projection directe : un clic sur un verset l'affiche tout de suite</label></div>
         <div class="row"><label><input type="checkbox" id="guide"> Guide « zone caméra » (pour caler OBS / vMix)</label></div>
       </details>
@@ -248,22 +267,26 @@
 
   <section class="right">
     <div class="card">
-      <div class="row" style="margin-top:0"><select id="pvsel">
+      <div class="row" id="pvrow" style="margin-top:0"><select id="pvsel">
         <option value="/output.html?layer=all&bg=checker&preview=1">Aperçu : sortie OBS / vMix (transparent)</option>
         <option value="/output.html?screen=1&preview=1">Aperçu : écran auxiliaire (avec fond)</option>
         <option value="/output.html?monitor=1&preview=1">Aperçu : moniteur du prédicateur</option>
       </select></div>
+      <div class="pvlbl" id="pvl1" style="display:none">EN DIRECT</div>
       <iframe class="preview" id="pv" src="/output.html?layer=all&bg=checker&preview=1"></iframe>
       <div class="chips"><span class="chip" id="c-verse">Verset</span><span class="chip" id="c-lyrics">Paroles</span><span class="chip" id="c-media">Image</span><span class="chip" id="c-lower">Bandeau</span></div>
-      <div class="hint">Aperçu de la sortie (damier = transparent).</div>
+      <div class="hint" id="pvhint">Aperçu de la sortie (damier = transparent).</div>
     </div>
 
     <div class="card" id="sctl" style="margin-top:16px;display:none">
-      <div class="bar" style="margin-top:0"><button class="go" id="lgo">▶ Afficher</button><button class="stop" id="lhide">■ Masquer</button></div>
-      <div class="livechip" id="lc-lyrics"></div>
-      <div class="row" id="llay"></div>
-      <div class="row"><button id="lprev">◀ Strophe préc.</button><button id="lnext">Strophe suiv. ▶</button></div>
-      <div class="hint">Un clic sur une strophe (à gauche) l'affiche tout de suite.</div>
+      <label class="hint" style="display:flex;gap:8px;align-items:center;margin:0 0 8px"><input type="checkbox" id="s-pvw" style="width:auto"> Aperçu avant projection (clic = aperçu, Projeter ou Entrée = en direct)</label>
+      <div id="pvbox"><div class="pvlbl">APERÇU</div><iframe class="preview" id="pv2" src="/output.html?layer=lyrics&bg=checker&preview=1&pvw=1"></iframe></div>
+      <div id="sbtns">
+        <div class="bar"><button class="go" id="lgo">▶ Projeter</button><button class="stop" id="lhide">■ Masquer</button></div>
+        <div class="livechip" id="lc-lyrics"></div>
+        <div class="row" id="llay"></div>
+        <div class="row"><button id="lprev" title="Touche ←">◀ Strophe préc.</button><button id="lnext" title="Touche →">Strophe suiv. ▶</button></div>
+      </div>
     </div>
 
     <div class="card" id="vctl" style="margin-top:16px">
@@ -275,13 +298,10 @@
       <div class="row" id="vers"></div>
       <div class="lbl tight">Affichage</div>
       <div class="row" id="vlay"></div>
-      <div class="row"><button id="vprev">◀ Verset préc.</button><button id="vnext">Verset suiv. ▶</button><button id="vplan">➕ Déroulé</button></div>
-      <div id="vpreview"></div>
+      <div class="row"><button id="vprev" title="Touche ←">◀ Verset préc.</button><button id="vnext" title="Touche →">Verset suiv. ▶</button><button id="vplan">➕ Déroulé</button></div>
+      <div id="vpreview" class="hint"></div>
+      <div id="vsecw" style="display:none"><div class="lbl tight" id="vsect"></div><div class="row" id="vsec" style="gap:6px"></div></div>
 
-      <div class="lbl">Recherche par mots</div>
-      <div class="row"><input id="q" placeholder="ex : bon berger"><select id="qt" style="width:auto"><option value="all">Toute la Bible</option><option value="ot">Ancien Testament</option><option value="nt">Nouveau Testament</option><option value="book">Livre ouvert</option></select><button id="qgo">Chercher</button></div>
-      <div id="qinfo" class="hint"></div>
-      <div id="qres" class="list"></div>
     </div>
   </section>
 </main>
@@ -297,7 +317,7 @@ let sel = null, anchor = null, rangeMode = false, browse = { mode: 'books' }, la
 const annOn = () => { const c = $('#m-ann'); return !c || c.checked; };
 const VL = [['lower', 'Bandeau bas'], ['side', 'Panneau côté'], ['center', 'Centré'], ['full', 'Plein écran']];
 const LL = [['bottom', 'Bas'], ['center', 'Centre']];
-const ML = [['full', 'Plein écran'], ['split-r', 'Image à droite'], ['split-l', 'Image à gauche'], ['pip-br', 'Petite ↘'], ['pip-bl', 'Petite ↙'], ['pip-tr', 'Petite ↗'], ['pip-tl', 'Petite ↖']];
+const ML = [['full', 'Plein écran'], ['split-r', 'Image à droite'], ['split-l', 'Image à gauche'], ['pip-br', 'Petite ↘'], ['pip-bl', 'Petite ↙'], ['pip-tr', 'Petite ↗'], ['pip-tl', 'Petite ↖'], ['cam-bl', 'Caméra ↙'], ['cam-br', 'Caméra ↘'], ['cam-tl', 'Caméra ↖'], ['cam-tr', 'Caméra ↗']];
 
 // ---------- réseau ----------
 function connect() {
@@ -340,7 +360,32 @@ function addToPlan(item) { send('plan.add', { item }); toast('Ajouté au déroul
 let curTab = 'verse';
 function syncCtl() {
   $('#vctl').style.display = curTab === 'verse' ? '' : 'none';
-  $('#sctl').style.display = curTab === 'songs' && $('#songview').style.display !== 'none' ? '' : 'none';
+  const ed = curTab === 'songs' && $('#songedit').style.display !== 'none';
+  const sv = curTab === 'songs' && ($('#songview').style.display !== 'none' || ed);
+  $('#sbtns').style.display = ed ? 'none' : '';
+  $('#sctl').style.display = sv ? '' : 'none';
+  const dual = sv && (pvwOn() || ed);
+  $('.right').classList.toggle('dual', dual);
+  $('#pvbox').style.display = dual ? '' : 'none';
+  $('#pvl1').style.display = dual ? '' : 'none';
+  if (dual) pushPvw();
+}
+const pvwOn = () => $('#s-pvw').checked;
+function pushPvw() {
+  const f = $('#pv2'); if (!f || !f.contentWindow) return;
+  const lay = S ? S.live.lyrics.layout : 'bottom';
+  let o = 'off';
+  if ((pvwOn() || ($('#songedit').style.display !== 'none')) && pvPick) o = { lines: pvPick.lines, layout: lay, label: pvPick.label || '', section: pvPick.i, total: pvPick.total, title: pvPick.title };
+  f.contentWindow.postMessage({ pvw: o }, '*');
+}
+let pvPick = null;   // strophe choisie (aperçu)
+$('#pv2').onload = pushPvw;
+try { $('#s-pvw').checked = localStorage.getItem('pvw') !== '0'; } catch (e) {}
+$('#s-pvw').onchange = () => { try { localStorage.setItem('pvw', pvwOn() ? '1' : '0'); } catch (e) {} syncCtl(); renderSong(); };
+function pickSection(s, i) {
+  curSection = i;
+  if (pvwOn()) { pvPick = { lines: s.sections[i].split('\n'), label: (s.labels || [])[i] || '', i, total: s.sections.length, title: s.title }; pushPvw(); renderSong(); }
+  else send('lyrics.show', { songId: s.id, section: i });
 }
 const HIDE = { verse: ['verse', 'verse.hide'], songs: ['lyrics', 'lyrics.hide'], media: ['media', 'media.hide'] };
 $('#tabs').addEventListener('click', e => {
@@ -385,8 +430,7 @@ async function previewSel(fillInput) {
   const j = await api('/api/verse?b=' + sel.book + '&c=' + sel.chapter + '&v1=' + sel.v1 + '&v2=' + sel.v2 + '&v=' + v);
   if (!j.ok) { box.innerHTML = '<div class="hint">Passage introuvable dans cette version.</div>'; return; }
   if (fillInput) $('#ref').value = j.ref;
-  box.innerHTML = j.versions.map(x => '<div class="vtxt"><b>' + esc(j.ref) + ' — ' + esc(x.abbr) + '</b><br>' + x.texts.map(t => (x.texts.length > 1 ? '<sup>' + t.v + '</sup> ' : '') + esc(t.text)).join(' ') + '</div>').join('') +
-    '<div class="hint">Prêt : appuie sur « Projeter » (ou Entrée).</div>';
+  box.innerHTML = '<b>' + esc(j.ref) + '</b> prêt : « Projeter » ou Entrée.';
 }
 
 function project() {
@@ -509,6 +553,7 @@ async function doSearch(more) {
   let t = $('#qt').value;
   if (t === 'book') { if (browse.book == null) return toast('Ouvre d\'abord un livre'); t = String(browse.book); }
   if (!more) { qOffset = 0; $('#qres').innerHTML = ''; }
+  searchMode(true);
   const j = await api('/api/search?v=' + v + '&q=' + encodeURIComponent(word) + '&t=' + t + '&offset=' + qOffset);
   const box = $('#qres'); box.querySelectorAll('.more').forEach(x => x.remove());
   qOffset += j.items.length;
@@ -520,13 +565,16 @@ async function doSearch(more) {
       const bk = (await getBooks()).find(b => b.i === r.p.book);
       browse = { mode: 'verses', book: r.p.book, bookName: bk ? bk.name : '', chapter: r.p.chapter, nch: bk ? bk.chapters : 0 };
       await previewSel(true); renderBrowse();
+      box.querySelectorAll('.item.cur').forEach(x => x.classList.remove('cur')); d.classList.add('cur');
+      if ((S.prefs.directClick && sel.v1 === sel.v2) || liveSameChapter()) project();
     };
     box.appendChild(d);
   });
   if (j.total > qOffset) { const m = el('<button class="more">Voir plus…</button>'); m.onclick = () => doSearch(true); box.appendChild(m); }
 }
+function searchMode(on) { $('#browse').style.display = $('#crumb').style.display = on ? 'none' : ''; $('#qres').style.maxHeight = on ? 'none' : ''; }
 $('#qgo').onclick = () => doSearch(false); $('#q').onkeydown = e => { if (e.key === 'Enter') doSearch(false); };
-$('#q').oninput = () => { if (!$('#q').value.trim()) { $('#qres').innerHTML = ''; $('#qinfo').textContent = ''; qOffset = 0; } };
+$('#q').oninput = () => { if (!$('#q').value.trim()) { $('#qres').innerHTML = ''; $('#qinfo').textContent = ''; qOffset = 0; searchMode(false); } };
 
 // =====================================================================
 //                               CHANTS
@@ -537,7 +585,7 @@ function renderSongs() {
   $('#slist').innerHTML = '';
   songs.filter(s => s.title.toLowerCase().includes(f)).forEach(s => {
     const d = el('<div class="item' + (curSong === s.id ? ' cur' : '') + '"><div class="t">' + esc(s.title) + '</div><button class="sm">✏️</button></div>');
-    d.onclick = () => { curSong = s.id; curSection = 0; renderSongs(); renderSong(); };
+    d.onclick = () => { curSong = s.id; curSection = 0; pvPick = null; pushPvw(); renderSongs(); renderSong(); };
     d.querySelector('button').onclick = e => { e.stopPropagation(); editSong(s); };
     $('#slist').appendChild(d);
   });
@@ -550,8 +598,9 @@ function renderSong() {
   s.sections.forEach((t, i) => {
     const live = S && S.live.lyrics.on && S.live.lyrics.songId === s.id && S.live.lyrics.section === i;
     const lb = (s.labels || [])[i];
-    const d = el('<div class="sec' + (live ? ' cur' : '') + '">' + (lb ? '<div class="lab">' + esc(lb) + '</div>' : '') + esc(t) + '</div>');
-    d.onclick = () => { curSection = i; send('lyrics.show', { songId: s.id, section: i }); };
+    const pv = pvwOn() && pvPick && pvPick.title === s.title && pvPick.i === i;
+    const d = el('<div class="sec' + (live ? ' cur' : '') + (pv ? ' pvw' : '') + '">' + (lb ? '<div class="lab">' + esc(lb) + '</div>' : '') + esc(t) + '</div>');
+    d.onclick = () => pickSection(s, i);
     box.appendChild(d);
   });
   $('#sadd').onclick = () => addToPlan({ type: 'song', songId: s.id, label: s.title });
@@ -572,19 +621,38 @@ function chunkLines(lines, per) {
 }
 function parseSong(text, per, auto) {
   const out = [];
-  for (const block of text.replace(/\r/g, '').split(/\n\s*\n/)) {
-    const lines = block.split('\n').map(l => l.replace(/\s+$/, '')).filter(l => l.trim());
-    let label = '', cur = [];
+  const blocks = text.replace(/\r/g, '').split(/\n\s*\n/).map(b => b.split('\n').map(l => l.replace(/\s+$/, '')).filter(l => l.trim())).filter(b => b.length);
+  // numéros de couplet en tête de bloc : jamais affichés (règles : seul sur sa ligne, suivi de . ) :, ou suite 1, 2, 3 sur des blocs successifs)
+  const lead = blocks.map(b => { const m = /^\s*(\d{1,2})\s*(?:([.):])\s*|\s+(?=\S))?(.*)$/.exec(b[0]); return m ? { n: +m[1], sep: m[2], rest: m[3] } : null; });
+  const seqOk = new Set();
+  for (let i = 0; i < blocks.length; i++) if (lead[i] && lead[i].n === 1 && !lead[i].sep && lead[i].rest) {
+    let k = i, n = 1; const run = [i];
+    for (let j = i + 1; j < blocks.length; j++) { if (lead[j] && lead[j].n === n + 1 && lead[j].rest) { n++; run.push(j); } else if (!lead[j] || lead[j].n !== n + 1) { if (!/^\s*(refrain|chorus|pont|bridge)/i.test(blocks[j][0])) break; } }
+    if (run.length >= 2) run.forEach(x => seqOk.add(x));
+  }
+  blocks.forEach((lines, bi) => {
+    let label = '', cur = [], num = '';
+    const L0 = lead[bi];
+    if (L0) {
+      if (!L0.rest && !L0.sep) { num = L0.n; lines = lines.slice(1); }                 // (a) seul sur sa ligne
+      else if (L0.sep && L0.rest !== undefined) { num = L0.n; lines = [L0.rest, ...lines.slice(1)].filter(l => l.trim()); }  // (b) « 1. » « 1) » « 1: »
+      else if (seqOk.has(bi)) { num = L0.n; lines = [L0.rest, ...lines.slice(1)]; }   // (c) suite 1, 2, 3
+    }
+    if (num !== '') label = 'Couplet ' + num;
     const flush = () => { if (cur.length) (auto ? chunkLines(cur, per) : [cur]).forEach(c => out.push({ label, text: c.join('\n') })); cur = []; };
     for (const l of lines) { const m = l.trim().length <= 32 && LABEL_RE.exec(l); if (m) { flush(); label = m[1].trim(); } else cur.push(l); }
     flush();
-  }
+  });
   return out;
 }
 function songPreview() {
   const list = parseSong($('#etext').value, +$('#eper').value, $('#eauto').checked);
   $('#eprev-t').textContent = list.length ? 'Aperçu : ' + list.length + ' diapo' + (list.length > 1 ? 's' : '') : '';
+  window.__eprevList = list;
   $('#eprev').innerHTML = list.map(x => '<div class="dia">' + (x.label ? '<div class="lab">' + esc(x.label) + '</div>' : '') + esc(x.text) + '</div>').join('');
+  $('#eprev').querySelectorAll('.dia').forEach((d, i) => d.onclick = () => { const x = list[i]; pvPick = { lines: x.text.split('\n'), label: x.label, i, total: list.length, title: $('#etitle').value }; pushPvw(); });
+  if (list.length && !pvPick) { pvPick = { lines: list[0].text.split('\n'), label: list[0].label, i: 0, total: list.length, title: $('#etitle').value }; }
+  pushPvw();
   return list;
 }
 ['#etext', '#eper', '#eauto'].forEach(id => { $(id).oninput = songPreview; $(id).onchange = songPreview; });
@@ -605,8 +673,15 @@ $('#esave').onclick = async () => {
   } catch (e) { toast(e.message); }
 };
 $('#edel').onclick = async () => { if (!confirm('Supprimer ce chant ?')) return; await api('/api/songs?id=' + editId, { method: 'DELETE' }); curSong = null; await loadSongs(); renderSong(); $('#ecancel').click(); };
-$('#lprev').onclick = () => send('step', { dir: -1 });
-$('#lnext').onclick = () => send('step', { dir: 1 });
+function lyricsNav(dir) {
+  const L = S.live.lyrics, sg = songs.find(x => x.id === curSong);
+  if (L.on && L.songId && (!sg || L.songId === sg.id)) return send('step', { dir, only: 'lyrics' });
+  if (!sg) return;
+  const i = Math.max(0, Math.min(sg.sections.length - 1, curSection + dir));
+  if (i !== curSection || !pvPick) pickSection(sg, i);
+}
+$('#lprev').onclick = () => lyricsNav(-1);
+$('#lnext').onclick = () => lyricsNav(1);
 $('#spptx').onclick = () => $('#spptxf').click();
 $('#spptxf').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
@@ -742,6 +817,15 @@ const ICON = { song: '🎵', verse: '📖', media: '🖼', announce: '📣', low
 const EDITABLE = ['announce', 'lower', 'note'];
 let planEdit = false;
 const itemSub = it => it.type === 'announce' ? (it.mode === 'card' ? [it.card.date, it.card.time, it.card.place].join(' · ') : 'avec visuel') : it.type === 'lower' ? (it.sub || '') : '';
+function renderVSec() {
+  const P = S && S.plan, w = $('#vsecw'); if (!P) return;
+  const sec = P.sections.find(x => x.id === P.target) || P.sections.find(x => x.items.some(i => i.id === P.cursor));
+  const vs = sec ? sec.items.filter(i => i.type === 'verse') : [];
+  w.style.display = vs.length ? '' : 'none'; if (!vs.length) return;
+  $('#vsect').textContent = 'Versets de cette section (' + sec.title + ')';
+  const box = $('#vsec'); box.innerHTML = '';
+  vs.forEach(i => { const b = el('<button class="sm' + (S.live.verse.on && S.live.verse.ref === i.ref ? ' on' : '') + '">' + esc(i.label || i.ref) + '</button>'); b.onclick = () => send('plan.go', { id: i.id }); box.appendChild(b); });
+}
 function renderPlan() {
   const P = S.plan, box = $('#planlist'); box.innerHTML = '';
   if (document.activeElement !== $('#planname')) $('#planname').value = P.name;
@@ -852,12 +936,12 @@ function itemModal(secId, existing) {
 const BUILTIN_FONTS = [['"Segoe UI", Roboto, Helvetica, Arial, sans-serif', 'Segoe UI / Roboto'], ['Arial, Helvetica, sans-serif', 'Arial'], ['Georgia, "Times New Roman", serif', 'Georgia'], ['Verdana, sans-serif', 'Verdana'],
   ['"Trebuchet MS", sans-serif', 'Trebuchet'], ['"Palatino Linotype", Palatino, serif', 'Palatino'], ['"Times New Roman", serif', 'Times'], ['Impact, sans-serif', 'Impact']];
 const THEME_FIELDS = {
-  verse: [['size', 'Taille max (px)', 'num', 2], ['color', 'Couleur du texte', 'color'], ['bg', 'Couleur du fond', 'color'], ['bgAlpha', 'Opacité du fond / de la teinte (0-1)', 'num', 0.05], ['refColor', 'Couleur de la référence', 'color'], ['refSize', 'Taille de la référence (% du texte)', 'num', 2]],
+  verse: [['sideW', 'Largeur du panneau côté (px)', 'num', 20], ['size', 'Taille max (px)', 'num', 2], ['color', 'Couleur du texte', 'color'], ['bg', 'Couleur du fond', 'color'], ['bgAlpha', 'Opacité du fond / de la teinte (0-1)', 'num', 0.05], ['refColor', 'Couleur de la référence', 'color'], ['refSize', 'Taille de la référence (% du texte)', 'num', 2]],
   lyrics: [['size', 'Taille max (px)', 'num', 2], ['weight', 'Graisse (400-900)', 'num', 100], ['color', 'Couleur du texte', 'color'], ['outline', 'Couleur du contour', 'color'], ['outlineW', 'Épaisseur du contour (0 = aucun, 11 = normal, 30 = très épais)', 'num', 1], ['upper', 'Majuscules', 'bool']],
   monitor: [['size', 'Taille max (px)', 'num', 2], ['color', 'Couleur du texte', 'color'], ['bg', 'Couleur du fond', 'color'], ['refColor', 'Couleur de la référence', 'color'], ['refSize', 'Taille de la référence (% du texte)', 'num', 2],
     ['chronoSize', 'Taille du chrono (px)', 'num', 4], ['chronoColor', 'Couleur du chrono', 'color'], ['chronoBg', 'Fond du chrono', 'color'], ['chronoBgAlpha', 'Opacité du fond du chrono (0-1)', 'num', 0.05], ['chronoPos', 'Position du chrono', 'select', [['bc', 'Bas centre'], ['br', 'Bas droite'], ['bl', 'Bas gauche'], ['tc', 'Haut centre'], ['tr', 'Haut droite'], ['tl', 'Haut gauche']]]],
   lower: [['size', 'Taille du titre (px)', 'num', 2], ['color', 'Couleur du texte', 'color'], ['bg', 'Couleur du fond', 'color'], ['bgAlpha', 'Opacité du fond (0-1)', 'num', 0.05], ['accent', 'Couleur du liseré', 'color'], ['pos', 'Position', 'select', [['left', 'Gauche'], ['center', 'Centre'], ['right', 'Droite']]]],
-  media: [['panel', 'Fond des panneaux (sans image)', 'color'], ['camWidth', 'Largeur zone prédicateur (px)', 'num', 20], ['imgScale', 'Taille de l\'image (%)', 'num', 5], ['pipSize', 'Largeur petite image (px)', 'num', 20]],
+  media: [['panel', 'Fond des panneaux (sans image)', 'color'], ['camWidth', 'Largeur zone prédicateur (px)', 'num', 20], ['imgScale', 'Taille de l\'image (%)', 'num', 5], ['pipSize', 'Largeur petite image (px)', 'num', 20], ['camSize', 'Largeur caméra en coin (px)', 'num', 20]],
 };
 function buildTheme() {
   for (const g in THEME_FIELDS) {
@@ -926,6 +1010,21 @@ function syncTheme() {
 $('#threset').onclick = () => { if (confirm('Remettre toute l\'apparence par défaut ?')) send('theme.reset'); };
 $('#guide').onchange = e => send('guide.set', { on: e.target.checked });
 $('#p-auto').onchange = e => send('prefs.set', { key: 'autoHide', value: e.target.checked });
+function obsForm() { return { enabled: $('#o-en').checked, host: $('#o-host').value, port: $('#o-port').value, scene: $('#o-scene').value, camSource: $('#o-cam').value, shiftX: $('#o-shift').value, ...($('#o-pw').value ? { password: $('#o-pw').value } : {}) }; }
+$('#o-save').onclick = () => { send('obs.set', obsForm()); $('#o-pw').value = ''; toast('Réglages OBS enregistrés'); };
+$('#o-en').onchange = () => send('obs.set', obsForm());
+$('#o-test').onclick = async () => {
+  send('obs.set', obsForm()); $('#o-pw').value = ''; $('#o-list').textContent = 'Test en cours…';
+  await new Promise(r => setTimeout(r, 1200));
+  const j = await api('/api/obs/test', { method: 'POST', body: '{}' });
+  $('#o-list').innerHTML = j.ok ? 'Scènes : <b>' + esc(j.scenes.join(', ')) + '</b><br>Sources de « ' + esc(j.scene) + ' » : <b>' + esc(j.sources.join(', ')) + '</b>' : '⚠ ' + esc(j.error);
+};
+function renderObs() {
+  const o = S.obs; if (!o) return; const c = o.cfg || {}, st = o.status || {}, f = id => document.activeElement === $(id);
+  if (!f('#o-host')) $('#o-host').value = c.host || ''; if (!f('#o-port')) $('#o-port').value = c.port || ''; if (!f('#o-scene')) $('#o-scene').value = c.scene || ''; if (!f('#o-cam')) $('#o-cam').value = c.camSource || ''; if (!f('#o-shift')) $('#o-shift').value = c.shiftX || 0;
+  $('#o-en').checked = !!c.enabled; if (!f('#o-pw')) $('#o-pw').placeholder = c.hasPassword ? 'Mot de passe enregistré (laisser vide)' : 'Mot de passe (si défini)';
+  $('#o-stat').innerHTML = (st.state === 'ok' ? '🟢 ' : st.state === 'error' ? '🔴 ' : '⚪ ') + esc(st.msg || '') + (st.crop ? '<br>Zone caméra : ' + esc(st.zone) + ' — rognage OBS : gauche <b>' + st.crop.left + '</b> px, droite <b>' + st.crop.right + '</b> px, haut ' + st.crop.top + ', bas ' + st.crop.bottom + ' (échelle ' + st.scale + ')' : '');
+}
 $('#p-lsecs').onchange = e => send('prefs.set', { key: 'lowerSecs', value: e.target.value });
 $('#p-direct').onchange = e => send('prefs.set', { key: 'directClick', value: e.target.checked });
 $('#pvsel').onchange = e => { $('#pv').src = e.target.value; };
@@ -1025,7 +1124,7 @@ function renderState() {
   document.querySelectorAll('#mlay button').forEach(b => b.classList.toggle('on', b.dataset.v === L.media.layout));
   if (document.activeElement !== $('#p-lsecs')) $('#p-lsecs').value = S.prefs.lowerSecs; $('#guide').checked = S.guide; $('#p-auto').checked = S.prefs.autoHide; $('#p-direct').checked = S.prefs.directClick;
   if (document.activeElement !== $('#bgdim')) $('#bgdim').value = Math.round((S.background.dim || 0) * 100);
-  renderPlan(); renderLowers(); renderUpdate(); renderBackup(); renderSong(); markMedia(); syncTheme(); markVerses(false);
+  renderPlan(); renderVSec(); renderObs(); renderLowers(); renderUpdate(); renderBackup(); renderSong(); markMedia(); syncTheme(); markVerses(false);
   if (!document.querySelector('#vers input') && bibles.length) renderBibles();
   // la sélection suit le verset en direct (boutons ◀ ▶, déroulé…)
   const lp = L.verse.on ? JSON.stringify(L.verse.p) : '';
@@ -1040,16 +1139,34 @@ function renderState() {
 }
 
 // ---------- raccourcis ----------
-$('#next').onclick = () => send('step', { dir: 1 });
-$('#prev').onclick = () => send('step', { dir: -1 });
+$('#next').onclick = () => send('step', { dir: 1, plan: true });
+$('#prev').onclick = () => send('step', { dir: -1, plan: true });
 $('#hideall').onclick = () => send('hide.all');
+function liveNav(dir) {
+  const L = S.live;
+  if (L.verse.on) return send('verse.nav', { dir });
+  if (L.lyrics.on && L.lyrics.songId) return send('step', { dir, only: 'lyrics' });
+  if (curTab === 'verse') return send('verse.nav', { dir });
+  if (curTab === 'songs' && curSong) {
+    const sg = songs.find(x => x.id === curSong); if (!sg) return;
+    const i = Math.max(0, Math.min(sg.sections.length - 1, curSection + dir));
+    if (i !== curSection) pickSection(sg, i);
+    return;
+  }
+  send('step', { dir });
+}
 addEventListener('keydown', e => {
   if (e.key === 'Escape') { const m = document.querySelector('.ovl'); if (m) m.remove(); else send('hide.all'); return; }
-  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
-  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); send('step', { dir: 1 }); }
-  if (e.key === 'ArrowLeft') { e.preventDefault(); send('step', { dir: -1 }); }
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (!S) return;
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); liveNav(1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); liveNav(-1); }
+  else if (e.key === 'PageDown') { e.preventDefault(); send('step', { dir: 1, plan: true }); }
+  else if (e.key === 'PageUp') { e.preventDefault(); send('step', { dir: -1, plan: true }); }
+  else if (e.key === 'Enter' && curTab === 'songs' && curSong && $('#songview').style.display !== 'none') { e.preventDefault(); $('#lgo').click(); }
 });
 
+const hh = () => document.documentElement.style.setProperty('--hh', document.querySelector('header').offsetHeight + 'px'); hh(); addEventListener('resize', hh);
 buildTheme(); buildUrls(); connect();
 (async () => { bibles = await api('/api/bibles'); renderBibles(); await loadSongs(); await loadMedia(); })();
 </script>

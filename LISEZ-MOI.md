@@ -95,7 +95,16 @@ En haut de la régie : ⏱ **▶ / ⏸ / ⟲**. Il compte le temps écoulé et s
 (case « moniteur » pour l'afficher ou le cacher ; taille, couleurs, fond, position : Réglages > Moniteur). Aucune limite ni alerte.
 
 ## Raccourcis
-`→` ou `Espace` : suivant (strophe suivante, puis élément suivant du déroulé) — `←` : précédent — `Échap` : tout masquer.
+`←` / `→` : précédent / suivant sur ce qui est à l'écran (verset ou strophe) ; si rien n'est affiché, sur l'onglet actif. `PageUp` / `PageDown` : étape précédente / suivante du déroulé. `Entrée` (onglet Chants) : projeter la strophe en aperçu. `Échap` : tout masquer. Les touches sont ignorées quand on écrit dans un champ.
+
+## Aperçu des chants
+Case « Aperçu avant projection » (cochée par défaut) : un clic sur une strophe l'affiche dans l'écran « Aperçu », « Projeter » l'envoie dans « En direct ». Dans l'éditeur, l'aperçu montre la strophe choisie avant d'enregistrer. Les numéros de couplet en tête (« 1 », « 1. », « 2) », suite 1-2-3) ne sont pas affichés : ils deviennent l'étiquette « Couplet N » dans la régie.
+
+## Bandeaux : priorités
+Le bandeau passe toujours en premier : le verset se range en panneau à droite, l'image « split » laisse le bandeau dans la zone caméra, une petite image en bas laisse le coin opposé. Aucun bandeau pendant un plein écran (verset plein écran, image/annonce/vidéo plein écran, caméra en coin). Après le bandeau, le verset retrouve sa disposition au verset suivant.
+
+## Pilotage d'OBS
+Réglages → Pilotage automatique d'OBS (OBS : Outils → Serveur WebSocket). Renseigne la source caméra : elle est recadrée et placée dans la zone libre, orateur centré (décalage réglable). Les valeurs de rognage sont affichées. Dispositions « Caméra ↙ ↘ ↖ ↗ » : annonce en grand, caméra en petit dans un coin, au-dessus de l'habillage. Largeur du panneau côté et des zones : Réglages → Verset / Images.
 
 ## Données et sauvegarde
 Tout est stocké dans le dossier `data/` (chants, images, Bibles, déroulé, apparence). Pour déplacer sur une autre machine, copie ce dossier.

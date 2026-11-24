@@ -38,6 +38,7 @@
   #lower.pos-left .lt { left: 90px; }
   #lower.pos-center .lt { left: 50%; transform: translateX(-50%); border: 0; border-bottom: 8px solid var(--lt-accent); border-radius: 14px; text-align: center; }
   #lower.pos-right .lt { right: 90px; border-left: 0; border-right: 10px solid var(--lt-accent); border-radius: 14px 0 0 14px; text-align: right; }
+  #lower.zone .lt { left: var(--lz-x); right: auto; transform: none; max-width: none; width: var(--lz-w); border: 0; border-left: 10px solid var(--lt-accent); border-radius: 0 14px 14px 0; text-align: left; }
   #lower.beside .lt { left: 90px; right: auto; max-width: 1000px; transform: none; border: 0; border-left: 10px solid var(--lt-accent); border-radius: 0 14px 14px 0; text-align: left; }   /* verset en panneau à droite : bandeau à gauche */
   #lower .lt-t { font-size: var(--lt-size); font-weight: 700; line-height: 1.15; }
   #lower .lt-s { font-size: calc(var(--lt-size) * .62); margin-top: .2em; opacity: .92; line-height: 1.2; }
@@ -58,7 +59,7 @@
   #verse .vref { margin-top: .5em; font-size: var(--v-refsize, .52em); color: var(--v-ref); font-weight: 700; letter-spacing: .02em; }
   #verse.lower .box { left: 110px; right: 110px; bottom: 56px; padding: 34px 56px; border-radius: 20px; }
   #verse.center .box { left: 190px; right: 190px; top: 50%; transform: translateY(-50%); padding: 50px 70px; border-radius: 24px; }
-  #verse.side .box { right: 0; top: 0; bottom: 0; width: 740px; padding: 70px 56px; display: flex; align-items: center; }
+  #verse.side .box { right: 0; top: 0; bottom: 0; width: var(--side-w, 740px); padding: 70px 56px; display: flex; align-items: center; }
   #verse.side .in { flex-direction: column; }
   #verse.full .box { inset: 0; padding: 90px 150px var(--c-pad, 90px); background-image: linear-gradient(var(--v-tintfull), var(--v-tintfull)), var(--v-img); display: flex; align-items: center; text-align: center; }
   #verse.full .in { width: 100%; }
@@ -119,10 +120,15 @@ function mediaRects(layout, M) {
     case 'pip-bl': return { img: [60, 1080 - ph - 60, ps, ph], cam: [0, 0, 1920, 1080] };
     case 'pip-tr': return { img: [1920 - ps - 60, 60, ps, ph], cam: [0, 0, 1920, 1080] };
     case 'pip-tl': return { img: [60, 60, ps, ph], cam: [0, 0, 1920, 1080] };
+    case 'cam-br': case 'cam-bl': case 'cam-tr': case 'cam-tl': {
+      const cs = Math.max(240, Math.min(900, +M.camSize || 560)), chh = cs * 9 / 16, x = layout[5] === 'r' ? 1920 - cs - 40 : 40;
+      const yy = layout[4] === 'b' ? 1080 - chh - 40 : 40;
+      return { panel: [0, 0, 1920, 1080], img: [0, 0, 1920, 1080], cam: [x, yy, cs, chh], corner: true };
+    }
     default: return { panel: [0, 0, 1920, 1080], img: [0, 0, 1920, 1080], cam: null };
   }
 }
-const VERSE_CAM = { side: [0, 0, 1180, 1080] };
+const verseCam = (sw) => ({ side: [0, 0, 1920 - sw, 1080] });
 
 const place = (el, r) => { if (!r) { el.style.opacity = 0; return; } el.style.opacity = 1; el.style.left = r[0] + 'px'; el.style.top = r[1] + 'px'; el.style.width = r[2] + 'px'; el.style.height = r[3] + 'px'; };
 const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -153,6 +159,7 @@ function render(S) {
   const root = document.documentElement.style, T = S.theme;
   root.setProperty('--font', T.font);
   const VT = MONITOR ? T.monitor : T.verse;
+  const sideW = Math.max(400, Math.min(1200, +T.verse.sideW || 740)); root.setProperty('--side-w', sideW + 'px');
   root.setProperty('--v-color', VT.color); root.setProperty('--v-ref', VT.refColor);
   root.setProperty('--v-refsize', ((+VT.refSize || 52) / 100) + 'em');
   const LT = T.lower;
@@ -224,7 +231,7 @@ function render(S) {
   vEl.classList.toggle('on', show('verse') && V.on);
   if (V.on && show('verse')) {
     vEl.className = 'layer on ' + vLayout;
-    if (!MONITOR && VERSE_CAM[V.layout]) cam = VERSE_CAM[V.layout];
+    if (!MONITOR && V.layout === 'side') cam = verseCam(sideW).side;
     if (changed('verse', [V, VT.size, VT.refSize, vLayout, T.font, cBot])) {
       const box = vEl.querySelector('.box'), inner = vEl.querySelector('.in');
       inner.innerHTML = V.versions.map(ver => {
@@ -251,8 +258,20 @@ function render(S) {
 
   // --- bandeau (jamais sur le moniteur du prédicateur)
   const W = S.live.lower, wEl = document.getElementById('lower');
-  wEl.classList.toggle('on', show('lower') && W.on);
+  // plein écran (verset plein écran, image/annonce/vidéo plein écran, caméra en coin) : jamais de bandeau
+  const mFull = S.live.media.on && show('media') && !MONITOR && (S.live.media.layout === 'full' || /^cam-/.test(S.live.media.layout));
+  const vFull = S.live.verse.on && show('verse') && !MONITOR && S.live.verse.layout === 'full';
+  wEl.classList.toggle('on', show('lower') && W.on && !mFull && !vFull);
   wEl.classList.remove('pos-left', 'pos-center', 'pos-right'); wEl.classList.add('pos-' + (LT.pos || 'left'));
+  // le bandeau a la priorité : il se place dans la zone caméra (image en split) ou dans le coin opposé (petite image en bas)
+  wEl.classList.remove('zone');
+  if (S.live.media.on && show('media') && !MONITOR) {
+    const ml2 = S.live.media.layout, cwz = Math.max(200, Math.min(1000, +T.media.camWidth || 640));
+    if (ml2 === 'split-r') { wEl.classList.add('zone'); root.setProperty('--lz-x', '0px'); root.setProperty('--lz-w', (cwz - 30) + 'px'); }
+    else if (ml2 === 'split-l') { wEl.classList.add('zone'); root.setProperty('--lz-x', (1920 - cwz) + 'px'); root.setProperty('--lz-w', (cwz - 30) + 'px'); }
+    else if (ml2 === 'pip-br') { wEl.classList.remove('pos-center', 'pos-right'); wEl.classList.add('pos-left'); }
+    else if (ml2 === 'pip-bl') { wEl.classList.remove('pos-center', 'pos-left'); wEl.classList.add('pos-right'); }
+  }
   if (W.on && show('lower') && changed('lower', [W.title, W.sub])) {
     wEl.querySelector('.lt-t').textContent = W.title;
     const ls = wEl.querySelector('.lt-s'); ls.textContent = W.sub || ''; ls.style.display = W.sub ? '' : 'none';
@@ -284,7 +303,16 @@ function ensureFont(S) {
   const fam = f.split(',')[0].trim();
   document.fonts.load('40px ' + fam).then(rerender, rerender);
 }
+const PVW = q.get('pvw') === '1';           // écran « Aperçu » des chants : affiche la strophe choisie avant projection
+let pvOver = null;
+addEventListener('message', e => { if (e.data && e.data.pvw) { pvOver = e.data.pvw === 'off' ? null : e.data.pvw; if (state) onState(state); } });
 function onState(S) {
+  if (PVW) {
+    S = JSON.parse(JSON.stringify(S));
+    S.live.verse.on = false; S.live.media.on = false; S.live.lower.on = false;
+    S.live.lyrics.on = !!pvOver;
+    if (pvOver) Object.assign(S.live.lyrics, pvOver, { on: true });
+  }
   state = S;
   if (S.chrono) chronoOffset = S.chrono.now - Date.now();
   const k = JSON.stringify(S.fonts);
