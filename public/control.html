@@ -202,6 +202,9 @@
     <div class="tab" id="t-set">
       <div class="lbl">Adresses à coller dans OBS / vMix / navigateurs</div>
       <table id="urls"></table>
+      <div class="lbl">Moniteur du prédicateur sans navigateur</div>
+      <div class="hint">Ouvre le moniteur en plein écran, sans barre d'adresse, sur l'écran de ton choix (nécessite Chrome ou Edge sur cet ordinateur). Position de l'écran : 0 = écran principal ; pour un second écran placé à droite d'un écran 1920 px de large, mets 1920 ; à gauche, −1920. Pour fermer : Alt+F4 (Windows) ou Cmd+Q (Mac), ou le bouton Fermer.</div>
+      <div class="row"><label>Position X de l'écran <input type="number" id="mon-x" value="1920" style="width:100px;display:inline-block"></label><button id="mon-open" class="primary sm">🖥 Ouvrir le moniteur du prédicateur</button><button id="mon-close" class="sm">Fermer</button></div>
       <div class="hint">OBS : source « Navigateur », 1920×1080. vMix : Add Input → Web Browser. Ajoute <code>?bg=green</code> si la transparence pose problème.</div>
 
       <details open><summary>Préférences de la régie</summary>
@@ -1010,6 +1013,9 @@ function syncTheme() {
 $('#threset').onclick = () => { if (confirm('Remettre toute l\'apparence par défaut ?')) send('theme.reset'); };
 $('#guide').onchange = e => send('guide.set', { on: e.target.checked });
 $('#p-auto').onchange = e => send('prefs.set', { key: 'autoHide', value: e.target.checked });
+try { const x = localStorage.getItem('monx'); if (x !== null) $('#mon-x').value = x; } catch (e) {}
+$('#mon-open').onclick = async () => { try { localStorage.setItem('monx', $('#mon-x').value); } catch (e) {} const j = await api('/api/monitor/open', { method: 'POST', body: JSON.stringify({ x: $('#mon-x').value }) }); toast(j.ok ? 'Moniteur ouvert' : j.error); };
+$('#mon-close').onclick = () => api('/api/monitor/close', { method: 'POST', body: '{}' });
 function obsForm() { return { enabled: $('#o-en').checked, host: $('#o-host').value, port: $('#o-port').value, scene: $('#o-scene').value, camSource: $('#o-cam').value, shiftX: $('#o-shift').value, ...($('#o-pw').value ? { password: $('#o-pw').value } : {}) }; }
 $('#o-save').onclick = () => { send('obs.set', obsForm()); $('#o-pw').value = ''; toast('Réglages OBS enregistrés'); };
 $('#o-en').onchange = () => send('obs.set', obsForm());

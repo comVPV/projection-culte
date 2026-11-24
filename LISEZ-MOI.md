@@ -33,6 +33,8 @@ la machine de diffusion charge l'adresse de sortie (même réseau).
 Adresse `http://IP-DE-LA-REGIE:8080/output.html?monitor=1` : affiche en plein écran exactement le même verset que le direct
 (fond, couleurs et taille réglables dans Réglages > Moniteur du prédicateur). Rien d'autre n'y apparaît.
 
+Sans navigateur : Réglages → « Ouvrir le moniteur du prédicateur » lance une fenêtre plein écran (Chrome ou Edge) sur l'écran choisi (position X de l'écran : 0 principal, 1920 second écran à droite). Autre méthode : OBS, source Navigateur + clic droit → Projecteur de source (plein écran).
+
 ## Parcourir la Bible
 Onglet Verset : tape « Jean » pour voir Jean, 1 Jean, 2 Jean, 3 Jean ; touche un livre, puis un chapitre, puis un verset.
 Un verset touché est **sélectionné** ; il part à l'écran avec **▶ Projeter** (ou Entrée). Option « Projection directe » dans Réglages.

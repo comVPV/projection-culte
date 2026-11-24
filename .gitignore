@@ -12,3 +12,4 @@ data/bibles/*
 # fichiers locaux
 data/plans.json
 _old/
+data/monitor-profile/

@@ -631,6 +631,8 @@ async function pptxToSong(buf) {
   return { title: title.trim(), sections };
 }
 
+let monitorProc = null;
+process.on('exit', () => { try { monitorProc && monitorProc.kill(); } catch (e) {} });
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
   const p = u.pathname, q = u.searchParams;
@@ -687,6 +689,26 @@ const server = http.createServer(async (req, res) => {
       }
       if (p === '/api/songs' && req.method === 'DELETE') {
         writeJSON(SONGS_FILE, loadSongs().filter(x => x.id !== q.get('id')));
+        return send(res, 200, { ok: true });
+      }
+      if (p === '/api/monitor/open' && req.method === 'POST') {
+        const b = JSON.parse((await readBody(req)).toString() || '{}');
+        const x = parseInt(b.x, 10) || 0, y = parseInt(b.y, 10) || 0;
+        const E = process.env, cands = process.platform === 'win32'
+          ? [E.ProgramFiles + '\\Google\\Chrome\\Application\\chrome.exe', E['ProgramFiles(x86)'] + '\\Google\\Chrome\\Application\\chrome.exe', E.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe', E['ProgramFiles(x86)'] + '\\Microsoft\\Edge\\Application\\msedge.exe', E.ProgramFiles + '\\Microsoft\\Edge\\Application\\msedge.exe']
+          : process.platform === 'darwin'
+            ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser']
+            : ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/microsoft-edge'];
+        const exe = cands.find(c => c && fs.existsSync(c));
+        if (!exe) return send(res, 200, { ok: false, error: 'Chrome ou Edge introuvable sur cet ordinateur. Installe Google Chrome, ou utilise la méthode OBS (projecteur de source).' });
+        if (monitorProc) { try { monitorProc.kill(); } catch (e) {} monitorProc = null; }
+        const prof = path.join(DATA, 'monitor-profile');
+        monitorProc = require('child_process').spawn(exe, ['--app=http://localhost:' + PORT + '/output.html?monitor=1', '--kiosk', '--user-data-dir=' + prof, '--window-position=' + x + ',' + y, '--window-size=1280,720', '--no-first-run', '--no-default-browser-check', '--autoplay-policy=no-user-gesture-required', '--disable-infobars', '--overscroll-history-navigation=0'], { stdio: 'ignore', detached: false });
+        monitorProc.on('exit', () => { monitorProc = null; }); monitorProc.on('error', () => { monitorProc = null; });
+        return send(res, 200, { ok: true });
+      }
+      if (p === '/api/monitor/close' && req.method === 'POST') {
+        if (monitorProc) { try { monitorProc.kill(); } catch (e) {} monitorProc = null; }
         return send(res, 200, { ok: true });
       }
       if (p === '/api/obs/test' && req.method === 'POST') {
